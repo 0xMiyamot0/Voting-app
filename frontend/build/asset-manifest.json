@@ -1,0 +1,22 @@
+{
+  "files": {
+    "main.css": "/static/css/main.424e26e1.css",
+    "main.js": "/static/js/main.14b5471b.js",
+    "static/js/488.0f02d2eb.chunk.js": "/static/js/488.0f02d2eb.chunk.js",
+    "static/media/IRANSansXFaNum-Heavy.ttf": "/static/media/IRANSansXFaNum-Heavy.b6acfd447a8ac7a67e8b.ttf",
+    "static/media/IRANSansXFaNum-DemiBold.ttf": "/static/media/IRANSansXFaNum-DemiBold.9af1b57effc2a6ef2d92.ttf",
+    "static/media/IRANSansXFaNum-UltraLight.ttf": "/static/media/IRANSansXFaNum-UltraLight.eb27ab363d04af40390c.ttf",
+    "static/media/IRANSansXFaNum-ExtraBold.ttf": "/static/media/IRANSansXFaNum-ExtraBold.a3f52270bd2502848ceb.ttf",
+    "static/media/IRANSansXFaNum-ExtraBlack.ttf": "/static/media/IRANSansXFaNum-ExtraBlack.cea19ebf830e242cfe97.ttf",
+    "static/media/IRANSansXFaNum-Thin.ttf": "/static/media/IRANSansXFaNum-Thin.2a492cd1ac4cd9835488.ttf",
+    "static/media/IRANSansXFaNum-Black.ttf": "/static/media/IRANSansXFaNum-Black.d0513cc4e33a7c112293.ttf",
+    "index.html": "/index.html",
+    "main.424e26e1.css.map": "/static/css/main.424e26e1.css.map",
+    "main.14b5471b.js.map": "/static/js/main.14b5471b.js.map",
+    "488.0f02d2eb.chunk.js.map": "/static/js/488.0f02d2eb.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.424e26e1.css",
+    "static/js/main.14b5471b.js"
+  ]
+}

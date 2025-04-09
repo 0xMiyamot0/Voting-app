@@ -1,0 +1,76 @@
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/iran-sans-font@v1.0.0/dist/IRANSansXFaNum-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/iran-sans-font@v1.0.0/dist/IRANSansXFaNum-Bold.woff2') format('woff2');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/iran-sans-font@v1.0.0/dist/IRANSansXFaNum-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/iran-sans-font@v1.0.0/dist/IRANSansXFaNum-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('../public/fonts/IRANSansXFaNum-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('../public/fonts/IRANSansXFaNum-UltraLight.ttf') format('truetype');
+  font-weight: 200;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('../public/fonts/IRANSansXFaNum-DemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('../public/fonts/IRANSansXFaNum-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('../public/fonts/IRANSansXFaNum-Heavy.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('../public/fonts/IRANSansXFaNum-Black.ttf') format('truetype');
+  font-weight: 950;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('../public/fonts/IRANSansXFaNum-ExtraBlack.ttf') format('truetype');
+  font-weight: 1000;
+  font-style: normal;
+} 
