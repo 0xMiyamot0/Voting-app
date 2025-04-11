@@ -48,6 +48,18 @@ const ADUserImport = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [selectedOU, setSelectedOU] = useState(null);
+    const [openGroupDialog, setOpenGroupDialog] = useState(false);
+    const [selectedTargetGroup, setSelectedTargetGroup] = useState('');
+    const [availableGroups] = useState([
+        { name: 'azmc', label: 'AZMC' },
+        { name: 'it', label: 'IT' },
+        { name: 'hr', label: 'HR' },
+        { name: 'finance', label: 'Finance' },
+        { name: 'marketing', label: 'Marketing' },
+        { name: 'sales', label: 'Sales' },
+        { name: 'operations', label: 'Operations' },
+        { name: 'management', label: 'Management' }
+    ]);
 
     const fetchOUs = async () => {
         try {
@@ -99,19 +111,35 @@ const ADUserImport = () => {
     };
 
     const handleImport = async () => {
+        if (!selectedTargetGroup) {
+            setOpenGroupDialog(true);
+            return;
+        }
+
         try {
             setLoading(true);
             setError('');
             const response = await axios.post('/api/import-ad-users', {
-                users: users.filter(user => selectedUsers.includes(user.username))
+                users: users.filter(user => selectedUsers.includes(user.username)),
+                target_group: selectedTargetGroup
             });
             setSuccess(response.data.message);
             setSelectedUsers([]);
+            setSelectedTargetGroup('');
+            setOpenGroupDialog(false);
         } catch (err) {
             setError(err.response?.data?.error || 'خطا در وارد کردن کاربران');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleGroupSelect = () => {
+        if (!selectedTargetGroup) {
+            setError('لطفا یک گروه را انتخاب کنید');
+            return;
+        }
+        handleImport();
     };
 
     const handleDeleteDialogOpen = () => {
@@ -344,6 +372,62 @@ const ADUserImport = () => {
                     </Grid>
                 </Grid>
             )}
+
+            {/* Group Selection Dialog */}
+            <Dialog 
+                open={openGroupDialog} 
+                onClose={() => setOpenGroupDialog(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>انتخاب گروه</DialogTitle>
+                <DialogContent>
+                    <DialogContentText sx={{ mb: 2 }}>
+                        لطفا گروهی که می‌خواهید کاربران در آن قرار بگیرند را انتخاب کنید.
+                    </DialogContentText>
+                    <Grid container spacing={2}>
+                        {availableGroups.map((group) => (
+                            <Grid item xs={12} sm={6} key={group.name}>
+                                <Card 
+                                    onClick={() => setSelectedTargetGroup(group.name)}
+                                    sx={{
+                                        cursor: 'pointer',
+                                        border: selectedTargetGroup === group.name ? '2px solid #1a237e' : '1px solid rgba(0,0,0,0.12)',
+                                        borderRadius: 2,
+                                        p: 2,
+                                        transition: 'all 0.2s',
+                                        '&:hover': {
+                                            transform: 'translateY(-2px)',
+                                            boxShadow: 2
+                                        }
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <FolderIcon sx={{ color: '#1a237e' }} />
+                                        <Typography>{group.label}</Typography>
+                                    </Box>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenGroupDialog(false)}>انصراف</Button>
+                    <Button 
+                        onClick={handleGroupSelect}
+                        variant="contained"
+                        disabled={!selectedTargetGroup}
+                        sx={{
+                            backgroundColor: '#1a237e',
+                            '&:hover': {
+                                backgroundColor: '#0d47a1'
+                            }
+                        }}
+                    >
+                        تایید و وارد کردن
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

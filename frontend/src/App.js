@@ -210,6 +210,14 @@ function App() {
               }
             />
             <Route
+              path="/voting"
+              element={
+                <PrivateRoute>
+                  <Voting />
+                </PrivateRoute>
+              }
+            />
+            <Route
               path="/"
               element={
                 <PrivateRoute>

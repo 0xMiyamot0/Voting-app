@@ -34,6 +34,7 @@ import {
   AccordionDetails,
   TextField,
   DialogContentText,
+  CircularProgress
 } from '@mui/material';
 import {
   HowToVote as VoteIcon,
@@ -52,10 +53,14 @@ import {
   StarHalf as StarHalfIcon,
   ExpandMore as ExpandMoreIcon,
   Folder as FolderIcon,
+  Group as GroupIcon,
+  Assessment as AssessmentIcon,
+  Send as SendIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 // Configure axios to include credentials
 axios.defaults.withCredentials = true;
@@ -73,6 +78,19 @@ const itemVariants = {
   })
 };
 
+// Define criteria array at the top level
+const EVALUATION_CRITERIA = [
+  { id: 'behavior', label: 'رفتار و اخلاق کاری', description: 'نحوه تعامل با همکاران و رعایت اصول اخلاقی' },
+  { id: 'communication', label: 'مهارت‌های ارتباطی', description: 'توانایی برقراری ارتباط موثر با همکاران و مدیران' },
+  { id: 'responsibility', label: 'مسئولیت‌پذیری', description: 'تعهد به وظایف و انجام به موقع کارها' },
+  { id: 'initiative', label: 'ابتکار و خلاقیت', description: 'توانایی ارائه راه‌حل‌های خلاقانه و پیشنهاد ایده‌های جدید' },
+  { id: 'teamwork', label: 'کار تیمی', description: 'توانایی همکاری در تیم و مشارکت در پروژه‌های گروهی' },
+  { id: 'performance', label: 'عملکرد و بهره‌وری', description: 'کیفیت و کمیت کار انجام شده و دستیابی به اهداف' }
+];
+
+// Define steps array at the top level
+const EVALUATION_STEPS = ['راهنمای ارزیابی', 'ارزیابی کارمندان', 'مرور و تایید نهایی'];
+
 const CRITERIA = [
   { id: 1, name: 'حسن رفتار و حفظ شئونات', icon: <PersonIcon /> },
   { id: 2, name: 'همکاری و مهارت های ارتباطی', icon: <PersonIcon /> },
@@ -81,6 +99,17 @@ const CRITERIA = [
   { id: 5, name: 'پیشبرد به موقع کارهای محوله', icon: <PersonIcon /> },
   { id: 6, name: 'مسئولیت پذیری و جدیت در کار', icon: <PersonIcon /> },
 ];
+
+const criteria = [
+  { id: 'behavior', label: 'رفتار و اخلاق کاری', description: 'نحوه تعامل با همکاران و رعایت اصول اخلاقی' },
+  { id: 'communication', label: 'مهارت‌های ارتباطی', description: 'توانایی برقراری ارتباط موثر با همکاران و مدیران' },
+  { id: 'responsibility', label: 'مسئولیت‌پذیری', description: 'تعهد به وظایف و انجام به موقع کارها' },
+  { id: 'initiative', label: 'ابتکار و خلاقیت', description: 'توانایی ارائه راه‌حل‌های خلاقانه و پیشنهاد ایده‌های جدید' },
+  { id: 'teamwork', label: 'کار تیمی', description: 'توانایی همکاری در تیم و مشارکت در پروژه‌های گروهی' },
+  { id: 'performance', label: 'عملکرد و بهره‌وری', description: 'کیفیت و کمیت کار انجام شده و دستیابی به اهداف' }
+];
+
+const steps = ['راهنمای ارزیابی', 'ارزیابی کارمندان', 'مرور و تایید نهایی'];
 
 // Custom Rating Component
 const CustomRating = ({ value, onChange, max = 5 }) => {
@@ -167,6 +196,7 @@ const CustomRating = ({ value, onChange, max = 5 }) => {
 
 function Voting() {
   const { isAuthenticated, logout, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [groupedEmployees, setGroupedEmployees] = useState({});
   const [ratings, setRatings] = useState({});
@@ -198,13 +228,16 @@ function Voting() {
     { name: 'تدارکات', label: 'تدارکات', logo: '/logos/procurement.webp', active_users: 0 },
     { name: 'ذوبگران رنگین فلز', label: 'ذوبگران رنگین فلز', logo: '/logos/zobgaran.webp', active_users: 0 },
     { name: 'زرین روی کاسپین', label: 'زرین روی کاسپین', logo: '/logos/caspian.webp', active_users: 0 },
-    { name: 'زرین ترابر', label: 'زرین ترابر', logo: '/logos/transport.webp', active_users: 0 }
+    { name: 'زرین ترابر', label: 'زرین ترابر', logo: '/logos/transport.webp', active_users: 0 },
+    { name: 'فلزات غیر آهنی', label: 'فلزات غیر آهنی', logo: '/logos/nonferrous.webp', active_users: 0 }
   ]);
   const [selectedOU, setSelectedOU] = useState(null);
   const [openAddEmployeeDialog, setOpenAddEmployeeDialog] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ name: '', position: '' });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -215,56 +248,48 @@ function Voting() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/employees', {
-        withCredentials: true
+      setLoading(true);
+      const response = await axios.get('http://localhost:5000/api/employees');
+      const employeesData = response.data.employees;
+      setEmployees(employeesData);
+
+      // Group employees by department (OU)
+      const grouped = {};
+      employeesData.forEach(employee => {
+        if (!grouped[employee.department]) {
+          grouped[employee.department] = [];
+        }
+        grouped[employee.department].push(employee);
       });
-      if (Array.isArray(response.data)) {
-        setEmployees(response.data);
-        // Group employees by OU (stored in department field)
-        const grouped = response.data.reduce((acc, emp) => {
-          // Use department field which contains the OU path
-          const ou = emp.department || 'سایر';
-          if (!acc[ou]) {
-            acc[ou] = [];
-          }
-          acc[ou].push(emp);
-          return acc;
-        }, {});
-        setGroupedEmployees(grouped);
-        
-        // Update active_users count for each OU
-        const updatedOUs = [...ous];
-        updatedOUs.forEach(ou => {
-          ou.active_users = grouped[ou.name]?.length || 0;
+      setGroupedEmployees(grouped);
+
+      // Update OU active_users count
+      const updatedOUs = [...ous];
+      updatedOUs.forEach(ou => {
+        ou.active_users = grouped[ou.name]?.length || 0;
+      });
+      setOus(updatedOUs);
+
+      // Initialize ratings for each employee
+      const initialRatings = {};
+      employeesData.forEach(employee => {
+        initialRatings[employee.id] = {};
+        EVALUATION_CRITERIA.forEach(criterion => {
+          initialRatings[employee.id][criterion.id] = 0;
         });
-        setOus(updatedOUs);
-        
-        // Initialize ratings for each employee
-        const initialRatings = {};
-        response.data.forEach(emp => {
-          initialRatings[emp.id] = {};
-          CRITERIA.forEach(criteria => {
-            initialRatings[emp.id][criteria.id] = 0;
-          });
-        });
-        setRatings(initialRatings);
-      } else {
-        setError('داده‌های دریافتی نامعتبر است');
-        setOpenSnackbar(true);
-      }
+      });
+      setRatings(initialRatings);
       setLoading(false);
-    } catch (error) {
-      setError('خطا در دریافت لیست کارمندان: ' + error.message);
-      setOpenSnackbar(true);
+    } catch (err) {
+      setError('خطا در دریافت اطلاعات کارمندان');
       setLoading(false);
     }
   };
 
   const handleOUClick = (ouName) => {
     setSelectedOU(ouName);
-    // Filter employees for the selected OU
-    const ouEmployees = employees.filter(emp => emp.department === ouName);
-    setGroupedEmployees({ [ouName]: ouEmployees });
+    setCurrentEmployeeIndex(0);
+    setActiveStep(1);
   };
 
   const handleBackToOUs = () => {
@@ -313,8 +338,8 @@ function Voting() {
     setRatings(prev => {
       const updated = { ...prev };
       updated[employee.id] = {};
-      CRITERIA.forEach(criteria => {
-        updated[employee.id][criteria.id] = 0;
+      EVALUATION_CRITERIA.forEach(criterion => {
+        updated[employee.id][criterion.id] = 0;
       });
       return updated;
     });
@@ -337,12 +362,12 @@ function Voting() {
     }
   };
 
-  const handleRatingChange = (employeeId, criteriaId, newValue) => {
+  const handleRatingChange = (employeeId, criterionId, value) => {
     setRatings(prev => ({
       ...prev,
       [employeeId]: {
         ...prev[employeeId],
-        [criteriaId]: newValue
+        [criterionId]: value
       }
     }));
   };
@@ -353,46 +378,59 @@ function Voting() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedEmployee || !isRatingComplete(selectedEmployee.id)) {
-      setError('لطفا برای تمام معیارها امتیاز دهید');
-      setOpenSnackbar(true);
-      return;
-    }
-
     try {
-      const response = await axios.post('http://localhost:5000/api/vote', {
-        ratings: {
-          [selectedEmployee.id]: ratings[selectedEmployee.id]
-        }
-      }, {
-        withCredentials: true
-      });
+      setLoading(true);
+      const votes = [];
       
-      if (response.data.message) {
-        setSuccess('رای شما با موفقیت ثبت شد!');
-        setHasVoted(true);
-        if (isAdmin) {
-          setRatings(prev => ({
-            ...prev,
-            [selectedEmployee.id]: {}
-          }));
-          setOpenSnackbar(true);
-          setOpenDialog(false);
-        } else {
-          setRatings({});
-          setOpenSnackbar(true);
+      Object.keys(ratings).forEach(employeeId => {
+        const employeeRatings = ratings[employeeId];
+        const hasRated = Object.values(employeeRatings).some(value => value > 0);
+        
+        if (hasRated) {
+          votes.push({
+            employee_id: parseInt(employeeId),
+            ratings: employeeRatings
+          });
         }
+      });
+
+      if (votes.length === 0) {
+        setError('لطفا حداقل برای یک کارمند امتیازدهی کنید');
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      setError(error.response?.data?.error || 'خطا در ثبت رای');
+
+      await axios.post('http://localhost:5000/api/vote', { votes });
+      
+      setSuccess('رای‌های شما با موفقیت ثبت شد');
+      setSnackbarMessage('رای‌های شما با موفقیت ثبت شد');
+      setSnackbarSeverity('success');
       setOpenSnackbar(true);
+      
+      if (!isAdmin) {
+        setTimeout(() => {
+          navigate('/thank-you');
+        }, 2000);
+      } else {
+        // Reset form for admin users
+        setRatings({});
+        setCurrentEmployeeIndex(0);
+        setActiveStep(0);
+        setSelectedOU(null);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      setError('خطا در ثبت رای‌ها');
+      setSnackbarMessage('خطا در ثبت رای‌ها');
+      setSnackbarSeverity('error');
+      setOpenSnackbar(true);
+      setLoading(false);
     }
   };
 
   const handleCloseSnackbar = () => {
     setOpenSnackbar(false);
-    setError('');
-    setSuccess('');
   };
 
   const handleLogout = async () => {
@@ -416,9 +454,304 @@ function Voting() {
   };
 
   const getProgressPercentage = () => {
-    if (employees.length === 0) return 0;
-    const completedCount = employees.filter(emp => isEmployeeRatingComplete(emp.id)).length;
-    return Math.round((completedCount / employees.length) * 100);
+    if (!selectedOU || !groupedEmployees[selectedOU]) return 0;
+    return ((currentEmployeeIndex + 1) / groupedEmployees[selectedOU].length) * 100;
+  };
+
+  const getCurrentEmployee = () => {
+    if (!selectedOU || !groupedEmployees[selectedOU]) return null;
+    return groupedEmployees[selectedOU][currentEmployeeIndex];
+  };
+
+  const renderStepContent = (step) => {
+    switch (step) {
+      case 0:
+        return (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', mb: 4 }}>
+              راهنمای ارزیابی کارمندان
+            </Typography>
+            
+            <Grid container spacing={3}>
+              {EVALUATION_CRITERIA.map((criterion) => (
+                <Grid item xs={12} md={6} key={criterion.id}>
+                  <Card sx={{ 
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    transition: 'transform 0.3s ease',
+                    '&:hover': {
+                      transform: 'translateY(-5px)'
+                    }
+                  }}>
+                    <CardContent sx={{ flexGrow: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <AssessmentIcon sx={{ color: 'primary.main', mr: 1, fontSize: 28 }} />
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {criterion.label}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body1" color="text.secondary">
+                        {criterion.description}
+                      </Typography>
+                      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+                          امتیازدهی:
+                        </Typography>
+                        <Rating
+                          value={3}
+                          readOnly
+                          precision={1}
+                          dir="ltr"
+                          icon={<StarIcon fontSize="inherit" sx={{ color: 'primary.main' }} />}
+                          emptyIcon={<StarBorderIcon fontSize="inherit" sx={{ color: 'primary.light', opacity: 0.5 }} />}
+                        />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+            
+            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => setActiveStep(1)}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                شروع ارزیابی
+              </Button>
+            </Box>
+          </Box>
+        );
+      
+      case 1:
+        const currentEmployee = getCurrentEmployee();
+        if (!currentEmployee) return null;
+        
+        return (
+          <Box sx={{ p: 3 }}>
+            <Box sx={{ mb: 4 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Box
+                  component="img"
+                  src={ous.find(ou => ou.name === selectedOU)?.logo}
+                  alt={selectedOU}
+                  sx={{ width: 40, height: 40, objectFit: 'contain', mr: 2 }}
+                />
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  {selectedOU}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Typography variant="body1" sx={{ mr: 2 }}>
+                  پیشرفت:
+                </Typography>
+                <Box sx={{ flexGrow: 1, height: 10, bgcolor: 'background.paper', borderRadius: 5, overflow: 'hidden' }}>
+                  <Box 
+                    sx={{ 
+                      height: '100%', 
+                      width: `${getProgressPercentage()}%`, 
+                      bgcolor: 'primary.main',
+                      transition: 'width 0.5s ease'
+                    }} 
+                  />
+                </Box>
+                <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+                  {currentEmployeeIndex + 1} از {groupedEmployees[selectedOU]?.length || 0}
+                </Typography>
+              </Box>
+            </Box>
+            
+            <Card sx={{ mb: 4, borderRadius: 3, overflow: 'hidden' }}>
+              <Box sx={{ 
+                p: 3, 
+                bgcolor: 'primary.main', 
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                <Avatar 
+                  sx={{ 
+                    width: 60, 
+                    height: 60, 
+                    bgcolor: 'white', 
+                    color: 'primary.main',
+                    fontSize: '1.5rem',
+                    mr: 2
+                  }}
+                >
+                  {currentEmployee.name.charAt(0)}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    {currentEmployee.name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                    {currentEmployee.department}
+                  </Typography>
+                </Box>
+              </Box>
+              
+              <CardContent sx={{ p: 3 }}>
+                <Grid container spacing={3}>
+                  {EVALUATION_CRITERIA.map((criterion) => (
+                    <Grid item xs={12} key={criterion.id}>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                          {criterion.label}
+                        </Typography>
+                        <Rating
+                          value={ratings[currentEmployee.id]?.[criterion.id] || 0}
+                          onChange={(event, newValue) => {
+                            handleRatingChange(currentEmployee.id, criterion.id, newValue);
+                          }}
+                          precision={1}
+                          dir="ltr"
+                          icon={<StarIcon fontSize="large" sx={{ color: 'primary.main' }} />}
+                          emptyIcon={<StarBorderIcon fontSize="large" sx={{ color: 'primary.light', opacity: 0.5 }} />}
+                          sx={{ fontSize: '2rem' }}
+                        />
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => setActiveStep(0)}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                قبلی
+              </Button>
+              
+              <Button
+                variant="contained"
+                color="primary"
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => setActiveStep(2)}
+                disabled={currentEmployeeIndex === (groupedEmployees[selectedOU]?.length || 0) - 1 && activeStep === EVALUATION_STEPS.length - 1}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                {currentEmployeeIndex === (groupedEmployees[selectedOU]?.length || 0) - 1 ? 'مرور نهایی' : 'بعدی'}
+              </Button>
+            </Box>
+          </Box>
+        );
+      
+      case 2:
+        return (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', mb: 4 }}>
+              مرور و تایید نهایی
+            </Typography>
+            
+            <Typography variant="body1" sx={{ mb: 3 }}>
+              لطفا ارزیابی‌های خود را مرور کنید و در صورت اطمینان، آن‌ها را ثبت کنید.
+            </Typography>
+            
+            <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                خلاصه ارزیابی‌ها
+              </Typography>
+              
+              <Divider sx={{ mb: 3 }} />
+              
+              {Object.keys(ratings).map(employeeId => {
+                const employee = employees.find(e => e.id === parseInt(employeeId));
+                if (!employee) return null;
+                
+                const employeeRatings = ratings[employeeId];
+                const hasRated = Object.values(employeeRatings).some(value => value > 0);
+                
+                if (!hasRated) return null;
+                
+                return (
+                  <Box key={employeeId} sx={{ mb: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <Avatar 
+                        sx={{ 
+                          width: 40, 
+                          height: 40, 
+                          bgcolor: 'primary.main', 
+                          color: 'white',
+                          mr: 2
+                        }}
+                      >
+                        {employee.name.charAt(0)}
+                      </Avatar>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        {employee.name}
+                      </Typography>
+                    </Box>
+                    
+                    <Grid container spacing={2}>
+                      {EVALUATION_CRITERIA.map(criterion => {
+                        const rating = employeeRatings[criterion.id];
+                        if (rating === 0) return null;
+                        
+                        return (
+                          <Grid item xs={12} sm={6} key={criterion.id}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Typography variant="body2" sx={{ minWidth: 150 }}>
+                                {criterion.label}:
+                              </Typography>
+                              <Rating
+                                value={rating}
+                                readOnly
+                                precision={1}
+                                dir="ltr"
+                                icon={<StarIcon fontSize="small" sx={{ color: 'primary.main' }} />}
+                                emptyIcon={<StarBorderIcon fontSize="small" sx={{ color: 'primary.light', opacity: 0.5 }} />}
+                              />
+                            </Box>
+                          </Grid>
+                        );
+                      })}
+                    </Grid>
+                    
+                    <Divider sx={{ mt: 2 }} />
+                  </Box>
+                );
+              })}
+            </Paper>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => setActiveStep(1)}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                بازگشت
+              </Button>
+              
+              <Button
+                variant="contained"
+                color="primary"
+                endIcon={<SendIcon />}
+                onClick={handleSubmit}
+                disabled={loading}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                {loading ? <CircularProgress size={24} color="inherit" /> : 'ثبت رای‌ها'}
+              </Button>
+            </Box>
+          </Box>
+        );
+      
+      default:
+        return null;
+    }
   };
 
   if (!isAuthenticated) {
@@ -435,11 +768,11 @@ function Voting() {
     );
   }
 
-  if (loading) {
+  if (loading && !selectedOU) {
     return (
       <Container maxWidth="md">
         <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <LinearProgress sx={{ width: '100%', mb: 2 }} />
+          <CircularProgress sx={{ mb: 2 }} />
           <Typography variant="body1" color="text.secondary">
             در حال بارگذاری...
           </Typography>
@@ -804,8 +1137,8 @@ function Voting() {
                 لطفا معیارهای زیر را ارزیابی کنید
               </Typography>
               <Grid container spacing={3}>
-                {CRITERIA.map((criteria) => (
-                  <Grid item xs={12} key={criteria.id}>
+                {EVALUATION_CRITERIA.map((criterion) => (
+                  <Grid item xs={12} key={criterion.id}>
                     <Paper 
                       elevation={0}
                       sx={{ 
@@ -822,12 +1155,12 @@ function Voting() {
                     >
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, textAlign: 'center' }}>
-                          {criteria.name}
+                          {criterion.label}
                         </Typography>
                         <CustomRating
-                          value={ratings[selectedEmployee.id]?.[criteria.id] || 0}
+                          value={ratings[selectedEmployee.id]?.[criterion.id] || 0}
                           onChange={(event, newValue) => {
-                            handleRatingChange(selectedEmployee.id, criteria.id, newValue);
+                            handleRatingChange(selectedEmployee.id, criterion.id, newValue);
                           }}
                         />
                       </Box>
@@ -856,7 +1189,7 @@ function Voting() {
               </Button>
               <Button
                 variant="contained"
-                onClick={handleSubmit}
+                onClick={() => setActiveStep(2)}
                 disabled={!isRatingComplete(selectedEmployee.id)}
                 sx={{
                   backgroundColor: '#0078D4',
@@ -871,7 +1204,7 @@ function Voting() {
                   py: 1
                 }}
               >
-                ثبت رای
+                مرور نهایی
               </Button>
             </Box>
           </>

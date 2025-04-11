@@ -14,18 +14,31 @@ import {
   useMediaQuery
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import LogoutIcon from '@mui/icons-material/Logout';
-import LoginIcon from '@mui/icons-material/Login';
+import { useNavigate, Link } from 'react-router-dom';
+import { 
+  AccountCircle as AccountCircleIcon,
+  Dashboard as DashboardIcon,
+  BarChart as BarChartIcon,
+  Logout as LogoutIcon,
+  Login as LoginIcon,
+  HowToVote as VoteIcon,
+  AdminPanelSettings as AdminPanelSettingsIcon,
+  Info as InfoIcon,
+  Home as HomeIcon
+} from '@mui/icons-material';
 import Logo from './Logo';
 
 // Helper function to detect if text is English
 const isEnglishText = (text) => {
   return /^[A-Za-z0-9\s.,!?@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]*$/.test(text);
 };
+
+const menuItems = [
+  { text: 'خانه', icon: <HomeIcon />, path: '/' },
+  { text: 'رای‌دهی', icon: <VoteIcon />, path: '/voting' },
+  { text: 'نتایج', icon: <BarChartIcon />, path: '/results' },
+  { text: 'درباره ما', icon: <InfoIcon />, path: '/about' },
+];
 
 const Navbar = () => {
   const { isAuthenticated, isAdmin, logout, user } = useAuth();
@@ -110,10 +123,44 @@ const Navbar = () => {
                     open={open}
                     onClose={handleClose}
                   >
+                    {/* Admin Menu Items */}
                     {isAdmin && (
-                      <MenuItem onClick={() => handleNavigate('/admin')}>
-                        <DashboardIcon sx={{ mr: 1 }} /> پنل مدیریت
-                      </MenuItem>
+                      <>
+                        <MenuItem 
+                          component={Link} 
+                          to="/admin" 
+                          onClick={handleClose}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            color: 'text.primary',
+                            '&:hover': {
+                              backgroundColor: 'rgba(0, 120, 212, 0.08)',
+                            },
+                          }}
+                        >
+                          <AdminPanelSettingsIcon sx={{ color: '#0078D4' }} />
+                          <Typography>پنل مدیریت</Typography>
+                        </MenuItem>
+                        <MenuItem 
+                          component={Link} 
+                          to="/voting" 
+                          onClick={handleClose}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            color: 'text.primary',
+                            '&:hover': {
+                              backgroundColor: 'rgba(0, 120, 212, 0.08)',
+                            },
+                          }}
+                        >
+                          <VoteIcon sx={{ color: '#0078D4' }} />
+                          <Typography>رای‌دهی</Typography>
+                        </MenuItem>
+                      </>
                     )}
                     <MenuItem onClick={() => handleNavigate('/results')}>
                       <BarChartIcon sx={{ mr: 1 }} /> نتایج
@@ -126,19 +173,34 @@ const Navbar = () => {
               ) : (
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   {isAdmin && (
-                    <Button 
-                      color="inherit" 
-                      onClick={() => navigate('/admin')}
-                      startIcon={<DashboardIcon />}
-                      sx={{ 
-                        borderRadius: 2,
-                        '&:hover': {
-                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        }
-                      }}
-                    >
-                      پنل مدیریت
-                    </Button>
+                    <>
+                      <Button 
+                        color="inherit" 
+                        onClick={() => navigate('/admin')}
+                        startIcon={<DashboardIcon />}
+                        sx={{ 
+                          borderRadius: 2,
+                          '&:hover': {
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                          }
+                        }}
+                      >
+                        پنل مدیریت
+                      </Button>
+                      <Button 
+                        color="inherit" 
+                        onClick={() => navigate('/voting')}
+                        startIcon={<VoteIcon />}
+                        sx={{ 
+                          borderRadius: 2,
+                          '&:hover': {
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                          }
+                        }}
+                      >
+                        رای‌دهی
+                      </Button>
+                    </>
                   )}
                   <Button 
                     color="inherit" 

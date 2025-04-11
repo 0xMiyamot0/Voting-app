@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from ldap3 import Server, Connection, ALL, SUBTREE, NTLM
 from ad_config import AD_CONFIG
 import re
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -24,6 +25,7 @@ app.config['ALLOWED_EXTENSIONS'] = {'xlsx', 'xls'}
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
@@ -55,6 +57,7 @@ class Vote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
+    ratings = db.Column(db.JSON)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -188,24 +191,36 @@ def vote():
             return jsonify({'error': 'You have already voted'}), 400
         
         data = request.get_json()
-        if not data or 'employee_ids' not in data:
+        if not data or 'ratings' not in data:
             return jsonify({'error': 'Invalid request data'}), 400
             
-        employee_ids = data['employee_ids']
+        ratings = data['ratings']
         
-        if len(employee_ids) != 3:
-            return jsonify({'error': 'You must vote for exactly 3 employees'}), 400
-        
-        # Check if all employee IDs exist
-        for emp_id in employee_ids:
-            if not Employee.query.get(emp_id):
-                return jsonify({'error': f'Employee with ID {emp_id} not found'}), 404
+        # Validate ratings data structure
+        for employee_id, criteria_ratings in ratings.items():
+            if not Employee.query.get(employee_id):
+                return jsonify({'error': f'Employee with ID {employee_id} not found'}), 404
+            
+            # Check if all criteria have ratings
+            if len(criteria_ratings) != 6:
+                return jsonify({'error': 'All criteria must be rated'}), 400
+            
+            # Validate rating values (1-5)
+            for criteria_id, rating in criteria_ratings.items():
+                if not isinstance(rating, int) or rating < 1 or rating > 5:
+                    return jsonify({'error': 'Invalid rating value'}), 400
         
         # Record votes
-        for emp_id in employee_ids:
-            employee = Employee.query.get(emp_id)
-            employee.votes += 1
-            vote = Vote(user_id=current_user.id, employee_id=emp_id)
+        for employee_id, criteria_ratings in ratings.items():
+            employee = Employee.query.get(employee_id)
+            # Calculate average rating
+            avg_rating = sum(criteria_ratings.values()) / len(criteria_ratings)
+            employee.votes += avg_rating
+            vote = Vote(
+                user_id=current_user.id,
+                employee_id=employee_id,
+                ratings=criteria_ratings
+            )
             db.session.add(vote)
         
         current_user.has_voted = True
@@ -452,6 +467,10 @@ def import_ad_users():
     try:
         data = request.get_json()
         users = data.get('users', [])
+        target_group = data.get('target_group')  # Get the target group from request
+        
+        if not target_group:
+            return jsonify({'error': 'Target group is required'}), 400
         
         imported = 0
         skipped = 0
@@ -475,10 +494,10 @@ def import_ad_users():
             
             db.session.add(new_user)
             
-            # Create employee record
+            # Create employee record with the target group as department
             new_employee = Employee(
                 name=user['name'],
-                department=user.get('ou', 'Unknown'),  # Use OU as department, default to 'Unknown' if not present
+                department=target_group,  # Use the selected target group
                 is_imported=True  # Mark as imported by admin
             )
             db.session.add(new_employee)

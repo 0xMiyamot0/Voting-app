@@ -34,6 +34,7 @@ import {
   AccordionDetails,
   TextField,
   DialogContentText,
+  CircularProgress
 } from '@mui/material';
 import {
   HowToVote as VoteIcon,
@@ -52,15 +53,18 @@ import {
   StarHalf as StarHalfIcon,
   ExpandMore as ExpandMoreIcon,
   Folder as FolderIcon,
+  Group as GroupIcon,
+  Assessment as AssessmentIcon,
+  Send as SendIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 // Configure axios to include credentials
 axios.defaults.withCredentials = true;
 
-const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i) => ({
     opacity: 1,
@@ -73,41 +77,50 @@ const itemVariants = {
   })
 };
 
-const CRITERIA = [
-  { id: 1, name: 'حسن رفتار و حفظ شئونات', icon: <PersonIcon /> },
-  { id: 2, name: 'همکاری و مهارت های ارتباطی', icon: <PersonIcon /> },
-  { id: 3, name: 'دانش و علاقه به یادگیری', icon: <PersonIcon /> },
-  { id: 4, name: 'کیفیت کار و سرعت عمل', icon: <PersonIcon /> },
-  { id: 5, name: 'پیشبرد به موقع کارهای محوله', icon: <PersonIcon /> },
-  { id: 6, name: 'مسئولیت پذیری و جدیت در کار', icon: <PersonIcon /> },
+  { id: 'behavior', label: '?????????? ?? ?????????? ????????', description: '???????? ?????????? ???? ?????????????? ?? ?????????? ???????? ????????????' },
+  { id: 'communication', label: '??????????????????? ??????????????', description: '?????????????? ?????????????? ???????????? ???????? ???? ?????????????? ?? ????????????' },
+  { id: 'responsibility', label: '???????????????????????????', description: '???????? ???? ?????????? ?? ?????????? ???? ???????? ??????????' },
+  { id: 'initiative', label: '???????????? ?? ????????????', description: '?????????????? ?????????? ?????????????????????? ?????????????? ?? ?????????????? ????????????????? ????????' },
+  { id: 'teamwork', label: '?????? ????????', description: '?????????????? ???????????? ???? ?????? ?? ???????????? ???? ??????????????????? ??????????' },
+  { id: 'performance', label: '???????????? ?? ?????????????????', description: '?????????? ?? ???????? ?????? ?????????? ?????? ?? ?????????????? ???? ??????????' }
 ];
 
+// Define steps array at the top level
+
+  { id: 1, name: '?????? ?????????? ?? ?????? ????????????', icon: <PersonIcon /> },
+  { id: 2, name: '???????????? ?? ?????????? ?????? ??????????????', icon: <PersonIcon /> },
+  { id: 3, name: '???????? ?? ?????????? ???? ??????????????', icon: <PersonIcon /> },
+  { id: 4, name: '?????????? ?????? ?? ???????? ??????', icon: <PersonIcon /> },
+  { id: 5, name: '???????????? ???? ???????? ???????????? ??????????', icon: <PersonIcon /> },
+  { id: 6, name: '?????????????? ?????????? ?? ???????? ???? ??????', icon: <PersonIcon /> },
+];
+
+  { id: 'behavior', label: '?????????? ?? ?????????? ????????', description: '???????? ?????????? ???? ?????????????? ?? ?????????? ???????? ????????????' },
+  { id: 'communication', label: '??????????????????? ??????????????', description: '?????????????? ?????????????? ???????????? ???????? ???? ?????????????? ?? ????????????' },
+  { id: 'responsibility', label: '???????????????????????????', description: '???????? ???? ?????????? ?? ?????????? ???? ???????? ??????????' },
+  { id: 'initiative', label: '???????????? ?? ????????????', description: '?????????????? ?????????? ?????????????????????? ?????????????? ?? ?????????????? ????????????????? ????????' },
+  { id: 'teamwork', label: '?????? ????????', description: '?????????????? ???????????? ???? ?????? ?? ???????????? ???? ??????????????????? ??????????' },
+  { id: 'performance', label: '???????????? ?? ?????????????????', description: '?????????? ?? ???????? ?????? ?????????? ?????? ?? ?????????????? ???? ??????????' }
+];
+
+
 // Custom Rating Component
-const CustomRating = ({ value, onChange, max = 5 }) => {
-  const [hover, setHover] = useState(-1);
-  const [hoverLabel, setHoverLabel] = useState('');
   
-  const ratingLabels = {
-    5: 'عالی',
-    4: 'خوب',
-    3: 'متوسط',
-    2: 'ضعیف',
-    1: 'بد'
+    5: '????????',
+    4: '??????',
+    3: '??????????',
+    2: '????????',
+    1: '????'
   };
   
-  const handleMouseMove = (event, index) => {
-    const ratingValue = max - index;
     setHover(ratingValue);
     setHoverLabel(ratingLabels[ratingValue]);
   };
   
-  const handleMouseLeave = () => {
     setHover(-1);
     setHoverLabel('');
   };
   
-  const handleClick = (index) => {
-    const ratingValue = max - index;
     onChange(null, ratingValue);
   };
   
@@ -115,8 +128,6 @@ const CustomRating = ({ value, onChange, max = 5 }) => {
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         {[...Array(max)].map((_, index) => {
-          const ratingValue = max - index;
-          const isFilled = hover >= ratingValue || value >= ratingValue;
           
           return (
             <Box
@@ -166,45 +177,27 @@ const CustomRating = ({ value, onChange, max = 5 }) => {
 };
 
 function Voting() {
-  const { isAuthenticated, logout, isAdmin } = useAuth();
-  const [employees, setEmployees] = useState([]);
-  const [groupedEmployees, setGroupedEmployees] = useState({});
-  const [ratings, setRatings] = useState({});
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [hasVoted, setHasVoted] = useState(false);
-  const [openSnackbar, setOpenSnackbar] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [activeStep, setActiveStep] = useState(0);
-  const [currentEmployeeIndex, setCurrentEmployeeIndex] = useState(0);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [ous, setOus] = useState([
-    { name: 'زرین معدن آسیا', label: 'زرین معدن آسیا', logo: '/logos/zmg.webp', active_users: 0 },
-    { name: 'آیرما', label: 'آیرما', logo: '/logos/airma.webp', active_users: 0 },
-    { name: 'بازرگانی', label: 'بازرگانی', logo: '/logos/trading.webp', active_users: 0 },
-    { name: 'اعتماد ایرانیان', label: 'اعتماد ایرانیان', logo: '/logos/etemad.webp', active_users: 0 },
-    { name: 'فلات زرین کیمیا', label: 'فلات زرین کیمیا', logo: '/logos/flat.webp', active_users: 0 },
-    { name: 'سرب و روی ایرانیان', label: 'سرب و روی ایرانیان', logo: '/logos/lead.webp', active_users: 0 },
-    { name: 'فناوری اطلاعات', label: 'فناوری اطلاعات', logo: '/logos/it.webp', active_users: 0 },
-    { name: 'گسترش روی ایرانیان', label: 'گسترش روی ایرانیان', logo: '/logos/gostaresh.webp', active_users: 0 },
-    { name: 'کیمیای زنجان گستران', label: 'کیمیای زنجان گستران', logo: '/logos/kimia.webp', active_users: 0 },
-    { name: 'واحد حقوقی', label: 'واحد حقوقی', logo: '/logos/legal.webp', active_users: 0 },
-    { name: 'مهدی آباد', label: 'مهدی آباد', logo: '/logos/mahdiabad.webp', active_users: 0 },
-    { name: 'خاورمیانه', label: 'خاورمیانه', logo: '/logos/middleeast.webp', active_users: 0 },
-    { name: 'مسئولین دفاتر', label: 'مسئولین دفاتر', logo: '/logos/office.webp', active_users: 0 },
-    { name: 'سیمین معدن', label: 'سیمین معدن', logo: '/logos/simin.webp', active_users: 0 },
-    { name: 'سهام', label: 'سهام', logo: '/logos/shares.webp', active_users: 0 },
-    { name: 'تدارکات', label: 'تدارکات', logo: '/logos/procurement.webp', active_users: 0 },
-    { name: 'ذوبگران رنگین فلز', label: 'ذوبگران رنگین فلز', logo: '/logos/zobgaran.webp', active_users: 0 },
-    { name: 'زرین روی کاسپین', label: 'زرین روی کاسپین', logo: '/logos/caspian.webp', active_users: 0 },
-    { name: 'زرین ترابر', label: 'زرین ترابر', logo: '/logos/transport.webp', active_users: 0 }
+    { name: '???????? ???????? ????????', label: '???????? ???????? ????????', logo: '/logos/zmg.webp', active_users: 0 },
+    { name: '??????????', label: '??????????', logo: '/logos/airma.webp', active_users: 0 },
+    { name: '????????????????', label: '????????????????', logo: '/logos/trading.webp', active_users: 0 },
+    { name: '???????????? ????????????????', label: '???????????? ????????????????', logo: '/logos/etemad.webp', active_users: 0 },
+    { name: '???????? ???????? ??????????', label: '???????? ???????? ??????????', logo: '/logos/flat.webp', active_users: 0 },
+    { name: '?????? ?? ?????? ????????????????', label: '?????? ?? ?????? ????????????????', logo: '/logos/lead.webp', active_users: 0 },
+    { name: '???????????? ??????????????', label: '???????????? ??????????????', logo: '/logos/it.webp', active_users: 0 },
+    { name: '?????????? ?????? ????????????????', label: '?????????? ?????? ????????????????', logo: '/logos/gostaresh.webp', active_users: 0 },
+    { name: '???????????? ?????????? ????????????', label: '???????????? ?????????? ????????????', logo: '/logos/kimia.webp', active_users: 0 },
+    { name: '???????? ??????????', label: '???????? ??????????', logo: '/logos/legal.webp', active_users: 0 },
+    { name: '???????? ????????', label: '???????? ????????', logo: '/logos/mahdiabad.webp', active_users: 0 },
+    { name: '??????????????????', label: '??????????????????', logo: '/logos/middleeast.webp', active_users: 0 },
+    { name: '?????????????? ??????????', label: '?????????????? ??????????', logo: '/logos/office.webp', active_users: 0 },
+    { name: '?????????? ????????', label: '?????????? ????????', logo: '/logos/simin.webp', active_users: 0 },
+    { name: '????????', label: '????????', logo: '/logos/shares.webp', active_users: 0 },
+    { name: '??????????????', label: '??????????????', logo: '/logos/procurement.webp', active_users: 0 },
+    { name: '?????????????? ?????????? ??????', label: '?????????????? ?????????? ??????', logo: '/logos/zobgaran.webp', active_users: 0 },
+    { name: '???????? ?????? ????????????', label: '???????? ?????? ????????????', logo: '/logos/caspian.webp', active_users: 0 },
+    { name: '???????? ??????????', label: '???????? ??????????', logo: '/logos/transport.webp', active_users: 0 },
+    { name: '?????????? ?????? ????????', label: '?????????? ?????? ????????', logo: '/logos/nonferrous.webp', active_users: 0 }
   ]);
-  const [selectedOU, setSelectedOU] = useState(null);
-  const [openAddEmployeeDialog, setOpenAddEmployeeDialog] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ name: '', position: '' });
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -213,73 +206,54 @@ function Voting() {
     }
   }, [isAuthenticated]);
 
-  const fetchEmployees = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/employees', {
-        withCredentials: true
+      setLoading(true);
+      setEmployees(employeesData);
+
+      // Group employees by department (OU)
+      employeesData.forEach(employee => {
+        if (!grouped[employee.department]) {
+          grouped[employee.department] = [];
+        }
+        grouped[employee.department].push(employee);
       });
-      if (Array.isArray(response.data)) {
-        setEmployees(response.data);
-        // Group employees by OU (stored in department field)
-        const grouped = response.data.reduce((acc, emp) => {
-          // Use department field which contains the OU path
-          const ou = emp.department || 'سایر';
-          if (!acc[ou]) {
-            acc[ou] = [];
-          }
-          acc[ou].push(emp);
-          return acc;
-        }, {});
-        setGroupedEmployees(grouped);
-        
-        // Update active_users count for each OU
-        const updatedOUs = [...ous];
-        updatedOUs.forEach(ou => {
-          ou.active_users = grouped[ou.name]?.length || 0;
+      setGroupedEmployees(grouped);
+
+      // Update OU active_users count
+      updatedOUs.forEach(ou => {
+        ou.active_users = grouped[ou.name]?.length || 0;
+      });
+      setOus(updatedOUs);
+
+      // Initialize ratings for each employee
+      employeesData.forEach(employee => {
+        initialRatings[employee.id] = {};
+          initialRatings[employee.id][criterion.id] = 0;
         });
-        setOus(updatedOUs);
-        
-        // Initialize ratings for each employee
-        const initialRatings = {};
-        response.data.forEach(emp => {
-          initialRatings[emp.id] = {};
-          CRITERIA.forEach(criteria => {
-            initialRatings[emp.id][criteria.id] = 0;
-          });
-        });
-        setRatings(initialRatings);
-      } else {
-        setError('داده‌های دریافتی نامعتبر است');
-        setOpenSnackbar(true);
-      }
+      });
+      setRatings(initialRatings);
       setLoading(false);
-    } catch (error) {
-      setError('خطا در دریافت لیست کارمندان: ' + error.message);
-      setOpenSnackbar(true);
+    } catch (err) {
+      setError('?????? ???? ???????????? ?????????????? ????????????????');
       setLoading(false);
     }
   };
 
-  const handleOUClick = (ouName) => {
     setSelectedOU(ouName);
-    // Filter employees for the selected OU
-    const ouEmployees = employees.filter(emp => emp.department === ouName);
-    setGroupedEmployees({ [ouName]: ouEmployees });
+    setCurrentEmployeeIndex(0);
+    setActiveStep(1);
   };
 
-  const handleBackToOUs = () => {
     setSelectedOU(null);
   };
 
-  const handleAddEmployee = () => {
     if (!newEmployee.name.trim()) {
-      setError('لطفا نام کارمند را وارد کنید');
+      setError('???????? ?????? ???????????? ???? ???????? ????????');
       setOpenSnackbar(true);
       return;
     }
 
     // Create a new employee object
-    const employee = {
       id: Date.now().toString(), // Generate a unique ID
       name: newEmployee.name,
       position: newEmployee.position,
@@ -291,7 +265,6 @@ function Voting() {
 
     // Update the grouped employees
     setGroupedEmployees(prev => {
-      const updated = { ...prev };
       if (!updated[selectedOU]) {
         updated[selectedOU] = [];
       }
@@ -311,10 +284,8 @@ function Voting() {
 
     // Initialize ratings for the new employee
     setRatings(prev => {
-      const updated = { ...prev };
       updated[employee.id] = {};
-      CRITERIA.forEach(criteria => {
-        updated[employee.id][criteria.id] = 0;
+        updated[employee.id][criterion.id] = 0;
       });
       return updated;
     });
@@ -322,13 +293,11 @@ function Voting() {
     // Reset the form and close the dialog
     setNewEmployee({ name: '', position: '' });
     setOpenAddEmployeeDialog(false);
-    setSuccess('کارمند جدید با موفقیت اضافه شد');
+    setSuccess('???????????? ???????? ???? ???????????? ?????????? ????');
     setOpenSnackbar(true);
   };
 
-  const checkVotingStatus = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/check-auth', {
         withCredentials: true
       });
       setHasVoted(response.data.has_voted);
@@ -337,88 +306,374 @@ function Voting() {
     }
   };
 
-  const handleRatingChange = (employeeId, criteriaId, newValue) => {
     setRatings(prev => ({
       ...prev,
       [employeeId]: {
         ...prev[employeeId],
-        [criteriaId]: newValue
+        [criterionId]: value
       }
     }));
   };
 
-  const isRatingComplete = (employeeId) => {
     if (!ratings[employeeId]) return false;
     return Object.values(ratings[employeeId]).every(rating => rating > 0);
   };
 
-  const handleSubmit = async () => {
-    if (!selectedEmployee || !isRatingComplete(selectedEmployee.id)) {
-      setError('لطفا برای تمام معیارها امتیاز دهید');
-      setOpenSnackbar(true);
-      return;
-    }
-
     try {
-      const response = await axios.post('http://localhost:5000/api/vote', {
-        ratings: {
-          [selectedEmployee.id]: ratings[selectedEmployee.id]
-        }
-      }, {
-        withCredentials: true
-      });
+      setLoading(true);
       
-      if (response.data.message) {
-        setSuccess('رای شما با موفقیت ثبت شد!');
-        setHasVoted(true);
-        if (isAdmin) {
-          setRatings(prev => ({
-            ...prev,
-            [selectedEmployee.id]: {}
-          }));
-          setOpenSnackbar(true);
-          setOpenDialog(false);
-        } else {
-          setRatings({});
-          setOpenSnackbar(true);
+      Object.keys(ratings).forEach(employeeId => {
+        
+        if (hasRated) {
+          votes.push({
+            employee_id: parseInt(employeeId),
+            ratings: employeeRatings
+          });
         }
+      });
+
+      if (votes.length === 0) {
+        setError('???????? ?????????? ???????? ???? ???????????? ?????????????????? ????????');
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      setError(error.response?.data?.error || 'خطا در ثبت رای');
+
+      await axios.post('http://localhost:5000/api/vote', { votes });
+      
+      setSuccess('??????????????? ?????? ???? ???????????? ?????? ????');
+      setSnackbarMessage('??????????????? ?????? ???? ???????????? ?????? ????');
+      setSnackbarSeverity('success');
       setOpenSnackbar(true);
+      
+      if (!isAdmin) {
+        setTimeout(() => {
+          navigate('/thank-you');
+        }, 2000);
+      } else {
+        // Reset form for admin users
+        setRatings({});
+        setCurrentEmployeeIndex(0);
+        setActiveStep(0);
+        setSelectedOU(null);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      setError('?????? ???? ?????? ?????????????');
+      setSnackbarMessage('?????? ???? ?????? ?????????????');
+      setSnackbarSeverity('error');
+      setOpenSnackbar(true);
+      setLoading(false);
     }
   };
 
-  const handleCloseSnackbar = () => {
     setOpenSnackbar(false);
-    setError('');
-    setSuccess('');
   };
 
-  const handleLogout = async () => {
     await logout();
     window.location.href = 'https://zimg.co';
   };
 
-  const handleOpenDialog = (employee) => {
     setSelectedEmployee(employee);
     setOpenDialog(true);
   };
 
-  const handleCloseDialog = () => {
     setSelectedEmployee(null);
     setOpenDialog(false);
   };
 
-  const isEmployeeRatingComplete = (employeeId) => {
     if (!ratings[employeeId]) return false;
     return Object.values(ratings[employeeId]).every(rating => rating > 0);
   };
 
-  const getProgressPercentage = () => {
-    if (employees.length === 0) return 0;
-    const completedCount = employees.filter(emp => isEmployeeRatingComplete(emp.id)).length;
-    return Math.round((completedCount / employees.length) * 100);
+    if (!selectedOU || !groupedEmployees[selectedOU]) return 0;
+    return ((currentEmployeeIndex + 1) / groupedEmployees[selectedOU].length) * 100;
+  };
+
+    if (!selectedOU || !groupedEmployees[selectedOU]) return null;
+    return groupedEmployees[selectedOU][currentEmployeeIndex];
+  };
+
+    switch (step) {
+      case 0:
+        return (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', mb: 4 }}>
+              ?????????????? ?????????????? ????????????????
+            </Typography>
+            
+            <Grid container spacing={3}>
+                <Grid item xs={12} md={6} key={criterion.id}>
+                  <Card sx={{ 
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    transition: 'transform 0.3s ease',
+                    '&:hover': {
+                      transform: 'translateY(-5px)'
+                    }
+                  }}>
+                    <CardContent sx={{ flexGrow: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <AssessmentIcon sx={{ color: 'primary.main', mr: 1, fontSize: 28 }} />
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {criterion.label}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body1" color="text.secondary">
+                        {criterion.description}
+                      </Typography>
+                      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+                          ??????????????????:
+                        </Typography>
+                        <Rating
+                          value={3}
+                          readOnly
+                          precision={1}
+                          dir="ltr"
+                          icon={<StarIcon fontSize="inherit" sx={{ color: 'primary.main' }} />}
+                          emptyIcon={<StarBorderIcon fontSize="inherit" sx={{ color: 'primary.light', opacity: 0.5 }} />}
+                        />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+            
+            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => setActiveStep(1)}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                ???????? ??????????????
+              </Button>
+            </Box>
+          </Box>
+        );
+      
+      case 1:
+        if (!currentEmployee) return null;
+        
+        return (
+          <Box sx={{ p: 3 }}>
+            <Box sx={{ mb: 4 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Box
+                  component="img"
+                  src={ous.find(ou => ou.name === selectedOU)?.logo}
+                  alt={selectedOU}
+                  sx={{ width: 40, height: 40, objectFit: 'contain', mr: 2 }}
+                />
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  {selectedOU}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Typography variant="body1" sx={{ mr: 2 }}>
+                  ????????????:
+                </Typography>
+                <Box sx={{ flexGrow: 1, height: 10, bgcolor: 'background.paper', borderRadius: 5, overflow: 'hidden' }}>
+                  <Box 
+                    sx={{ 
+                      height: '100%', 
+                      width: `${getProgressPercentage()}%`, 
+                      bgcolor: 'primary.main',
+                      transition: 'width 0.5s ease'
+                    }} 
+                  />
+                </Box>
+                <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
+                  {currentEmployeeIndex + 1} ???? {groupedEmployees[selectedOU]?.length || 0}
+                </Typography>
+              </Box>
+            </Box>
+            
+            <Card sx={{ mb: 4, borderRadius: 3, overflow: 'hidden' }}>
+              <Box sx={{ 
+                p: 3, 
+                bgcolor: 'primary.main', 
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                <Avatar 
+                  sx={{ 
+                    width: 60, 
+                    height: 60, 
+                    bgcolor: 'white', 
+                    color: 'primary.main',
+                    fontSize: '1.5rem',
+                    mr: 2
+                  }}
+                >
+                  {currentEmployee.name.charAt(0)}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    {currentEmployee.name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                    {currentEmployee.department}
+                  </Typography>
+                </Box>
+              </Box>
+              
+              <CardContent sx={{ p: 3 }}>
+                <Grid container spacing={3}>
+                    <Grid item xs={12} key={criterion.id}>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                          {criterion.label}
+                        </Typography>
+                        <Rating
+                          value={ratings[currentEmployee.id]?.[criterion.id] || 0}
+                          onChange={(event, newValue) => {
+                            handleRatingChange(currentEmployee.id, criterion.id, newValue);
+                          }}
+                          precision={1}
+                          dir="ltr"
+                          icon={<StarIcon fontSize="large" sx={{ color: 'primary.main' }} />}
+                          emptyIcon={<StarBorderIcon fontSize="large" sx={{ color: 'primary.light', opacity: 0.5 }} />}
+                          sx={{ fontSize: '2rem' }}
+                        />
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => setActiveStep(0)}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                ????????
+              </Button>
+              
+              <Button
+                variant="contained"
+                color="primary"
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => setActiveStep(2)}
+                disabled={currentEmployeeIndex === (groupedEmployees[selectedOU]?.length || 0) - 1 && activeStep === EVALUATION_STEPS.length - 1}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                {currentEmployeeIndex === (groupedEmployees[selectedOU]?.length || 0) - 1 ? '???????? ??????????' : '????????'}
+              </Button>
+            </Box>
+          </Box>
+        );
+      
+      case 2:
+        return (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', mb: 4 }}>
+              ???????? ?? ?????????? ??????????
+            </Typography>
+            
+            <Typography variant="body1" sx={{ mb: 3 }}>
+              ???????? ??????????????????????? ?????? ???? ???????? ???????? ?? ???? ???????? ???????????????? ??????????? ???? ?????? ????????.
+            </Typography>
+            
+            <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                ?????????? ?????????????????????
+              </Typography>
+              
+              <Divider sx={{ mb: 3 }} />
+              
+              {Object.keys(ratings).map(employeeId => {
+                if (!employee) return null;
+                
+                
+                if (!hasRated) return null;
+                
+                return (
+                  <Box key={employeeId} sx={{ mb: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <Avatar 
+                        sx={{ 
+                          width: 40, 
+                          height: 40, 
+                          bgcolor: 'primary.main', 
+                          color: 'white',
+                          mr: 2
+                        }}
+                      >
+                        {employee.name.charAt(0)}
+                      </Avatar>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        {employee.name}
+                      </Typography>
+                    </Box>
+                    
+                    <Grid container spacing={2}>
+                        if (rating === 0) return null;
+                        
+                        return (
+                          <Grid item xs={12} sm={6} key={criterion.id}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Typography variant="body2" sx={{ minWidth: 150 }}>
+                                {criterion.label}:
+                              </Typography>
+                              <Rating
+                                value={rating}
+                                readOnly
+                                precision={1}
+                                dir="ltr"
+                                icon={<StarIcon fontSize="small" sx={{ color: 'primary.main' }} />}
+                                emptyIcon={<StarBorderIcon fontSize="small" sx={{ color: 'primary.light', opacity: 0.5 }} />}
+                              />
+                            </Box>
+                          </Grid>
+                        );
+                      })}
+                    </Grid>
+                    
+                    <Divider sx={{ mt: 2 }} />
+                  </Box>
+                );
+              })}
+            </Paper>
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => setActiveStep(1)}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                ????????????
+              </Button>
+              
+              <Button
+                variant="contained"
+                color="primary"
+                endIcon={<SendIcon />}
+                onClick={handleSubmit}
+                disabled={loading}
+                sx={{ px: 4, py: 1.5, borderRadius: 2 }}
+              >
+                {loading ? <CircularProgress size={24} color="inherit" /> : '?????? ?????????????'}
+              </Button>
+            </Box>
+          </Box>
+        );
+      
+      default:
+        return null;
+    }
   };
 
   if (!isAuthenticated) {
@@ -427,7 +682,7 @@ function Voting() {
         <Fade in={true} timeout={500}>
           <Box sx={{ mt: 4 }}>
             <Alert severity="error" icon={<ErrorIcon />}>
-              لطفا برای رای دادن وارد شوید
+              ???????? ???????? ?????? ???????? ???????? ????????
             </Alert>
           </Box>
         </Fade>
@@ -435,13 +690,13 @@ function Voting() {
     );
   }
 
-  if (loading) {
+  if (loading && !selectedOU) {
     return (
       <Container maxWidth="md">
         <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <LinearProgress sx={{ width: '100%', mb: 2 }} />
+          <CircularProgress sx={{ mb: 2 }} />
           <Typography variant="body1" color="text.secondary">
-            در حال بارگذاری...
+            ???? ?????? ????????????????...
           </Typography>
         </Box>
       </Container>
@@ -477,15 +732,15 @@ function Voting() {
                 <CheckCircleIcon sx={{ fontSize: 60, color: '#107C10' }} />
               </Box>
               <Typography variant="h4" gutterBottom sx={{ fontWeight: 600, color: '#107C10' }}>
-                با تشکر از رای شما!
+                ???? ???????? ???? ?????? ??????!
               </Typography>
               <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
-                رای شما با موفقیت ثبت شد. نتایج پس از پایان زمان رای‌گیری قابل مشاهده خواهد بود.
+                ?????? ?????? ???? ???????????? ?????? ????. ?????????? ???? ???? ?????????? ???????? ????????????????? ???????? ???????????? ?????????? ??????.
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 3 }}>
                 <Chip
                   icon={<VoteIcon />}
-                  label="رای ثبت شد"
+                  label="?????? ?????? ????"
                   color="success"
                   sx={{ 
                     borderRadius: 2,
@@ -507,7 +762,7 @@ function Voting() {
                     }
                   }}
                 >
-                  خروج از حساب کاربری
+                  ???????? ???? ???????? ????????????
                 </Button>
               </Box>
             </Card>
@@ -539,10 +794,10 @@ function Voting() {
             <Box sx={{ textAlign: 'center', mb: 2 }}>
               <VoteIcon sx={{ fontSize: 40, mb: 1 }} />
               <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-                ارزیابی کارمندان
+                ?????????????? ????????????????
               </Typography>
               <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                برای ارزیابی هر کارمند، روی دکمه رای دادن کلیک کنید
+                ???????? ?????????????? ???? ?????????????? ?????? ???????? ?????? ???????? ???????? ????????
               </Typography>
             </Box>
           </Paper>
@@ -562,7 +817,7 @@ function Voting() {
                     <ArrowBackIcon />
                   </IconButton>
                   <Typography variant="h6" sx={{ color: '#1a237e' }}>
-                    کارمندان {selectedOU}
+                    ???????????????? {selectedOU}
                   </Typography>
                 </Box>
                 {isAdmin && (
@@ -577,7 +832,7 @@ function Voting() {
                       boxShadow: '0 4px 12px rgba(0,120,212,0.2)'
                     }}
                   >
-                    افزودن کارمند جدید
+                    ???????????? ???????????? ????????
                   </Button>
                 )}
               </Box>
@@ -642,7 +897,7 @@ function Voting() {
                               : '0 4px 12px rgba(0,120,212,0.2)'
                           }}
                         >
-                          {isRatingComplete(employee.id) ? 'ویرایش رای' : 'رای دادن'}
+                          {isRatingComplete(employee.id) ? '???????????? ??????' : '?????? ????????'}
                         </Button>
                       </Box>
                     </Card>
@@ -664,7 +919,7 @@ function Voting() {
                       color: '#1a237e',
                       fontWeight: 'bold'
                     }}>
-                      لیست گروه‌ها
+                      ???????? ???????????????
                     </Typography>
                     <Box sx={{ 
                       display: 'grid',
@@ -801,11 +1056,10 @@ function Voting() {
             
             <DialogContent sx={{ p: 4 }}>
               <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textAlign: 'center' }}>
-                لطفا معیارهای زیر را ارزیابی کنید
+                ???????? ???????????????? ?????? ???? ?????????????? ????????
               </Typography>
               <Grid container spacing={3}>
-                {CRITERIA.map((criteria) => (
-                  <Grid item xs={12} key={criteria.id}>
+                  <Grid item xs={12} key={criterion.id}>
                     <Paper 
                       elevation={0}
                       sx={{ 
@@ -822,12 +1076,12 @@ function Voting() {
                     >
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, textAlign: 'center' }}>
-                          {criteria.name}
+                          {criterion.label}
                         </Typography>
                         <CustomRating
-                          value={ratings[selectedEmployee.id]?.[criteria.id] || 0}
+                          value={ratings[selectedEmployee.id]?.[criterion.id] || 0}
                           onChange={(event, newValue) => {
-                            handleRatingChange(selectedEmployee.id, criteria.id, newValue);
+                            handleRatingChange(selectedEmployee.id, criterion.id, newValue);
                           }}
                         />
                       </Box>
@@ -852,11 +1106,11 @@ function Voting() {
                   }
                 }}
               >
-                انصراف
+                ????????????
               </Button>
               <Button
                 variant="contained"
-                onClick={handleSubmit}
+                onClick={() => setActiveStep(2)}
                 disabled={!isRatingComplete(selectedEmployee.id)}
                 sx={{
                   backgroundColor: '#0078D4',
@@ -871,7 +1125,7 @@ function Voting() {
                   py: 1
                 }}
               >
-                ثبت رای
+                ???????? ??????????
               </Button>
             </Box>
           </>
@@ -880,15 +1134,15 @@ function Voting() {
 
       {/* Dialog for adding new employee */}
       <Dialog open={openAddEmployeeDialog} onClose={() => setOpenAddEmployeeDialog(false)}>
-        <DialogTitle>افزودن کارمند جدید</DialogTitle>
+        <DialogTitle>???????????? ???????????? ????????</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            لطفا اطلاعات کارمند جدید را وارد کنید.
+            ???????? ?????????????? ???????????? ???????? ???? ???????? ????????.
           </DialogContentText>
           <TextField
             autoFocus
             margin="dense"
-            label="نام کارمند"
+            label="?????? ????????????"
             type="text"
             fullWidth
             variant="outlined"
@@ -897,7 +1151,7 @@ function Voting() {
           />
           <TextField
             margin="dense"
-            label="سمت"
+            label="??????"
             type="text"
             fullWidth
             variant="outlined"
@@ -906,9 +1160,9 @@ function Voting() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenAddEmployeeDialog(false)}>انصراف</Button>
+          <Button onClick={() => setOpenAddEmployeeDialog(false)}>????????????</Button>
           <Button onClick={handleAddEmployee} variant="contained" color="primary">
-            افزودن
+            ????????????
           </Button>
         </DialogActions>
       </Dialog>
