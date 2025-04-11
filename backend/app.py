@@ -10,6 +10,7 @@ import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from ldap3 import Server, Connection, ALL, SUBTREE, NTLM
 from ad_config import AD_CONFIG
+import re
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -35,6 +36,7 @@ class User(UserMixin, db.Model):
     has_voted = db.Column(db.Boolean, default=False)
     reset_token = db.Column(db.String(100), unique=True)
     reset_token_expires = db.Column(db.DateTime)
+    is_imported = db.Column(db.Boolean, default=False)  # Flag to indicate if user was imported from AD
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -47,6 +49,7 @@ class Employee(db.Model):
     name = db.Column(db.String(100), nullable=False)
     department = db.Column(db.String(100), nullable=False)
     votes = db.Column(db.Integer, default=0)
+    is_imported = db.Column(db.Boolean, default=False)  # Flag to indicate if employee was imported by admin
 
 class Vote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -81,7 +84,6 @@ def authenticate_ad_user(username, password):
                     'user_info': {
                         'username': username,
                         'display_name': str(user_data.displayName) if hasattr(user_data, 'displayName') else username,
-                        'email': str(user_data.mail) if hasattr(user_data, 'mail') else '',
                         'department': str(user_data.department) if hasattr(user_data, 'department') else '',
                         'is_admin': is_admin
                     }
@@ -129,7 +131,6 @@ def login():
                 'is_admin': user.is_admin,
                 'has_voted': user.has_voted,
                 'name': auth_result['user_info']['display_name'],
-                'email': auth_result['user_info']['email'],
                 'department': auth_result['user_info']['department']
             }
         })
@@ -145,8 +146,7 @@ def login():
                 'username': user.username,
                 'is_admin': user.is_admin,
                 'has_voted': user.has_voted,
-                'name': username,
-                'email': f"{username}@zimg.local"
+                'name': username
             }
         })
     
@@ -165,7 +165,8 @@ def check_auth():
 def get_employees():
     try:
         print("Fetching employees...")  # Debug print
-        employees = Employee.query.all()
+        # Only get employees that were imported by admin
+        employees = Employee.query.filter_by(is_imported=True).all()
         print(f"Found {len(employees)} employees")  # Debug print
         employee_list = [{
             'id': emp.id,
@@ -360,24 +361,76 @@ def fetch_ad_users():
     try:
         # Connect to AD
         server = Server(AD_CONFIG['server'], get_info=ALL)
+        print(f"Connecting to AD server: {AD_CONFIG['server']}")
+        
         conn = Connection(server, 
                         user=AD_CONFIG['user_dn'],
                         password=AD_CONFIG['password'],
                         auto_bind=True)
         
+        print(f"Connected to AD server. Bound as: {AD_CONFIG['user_dn']}")
+        
+        # Calculate date 1 month ago in Windows filetime format
+        one_month_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+        windows_epoch = datetime.datetime(1601, 1, 1)
+        delta = one_month_ago - windows_epoch
+        one_month_ago_ts = int(delta.total_seconds() * 10000000)  # Convert to Windows filetime
+        
+        # Search for users who have been active in the last month
+        search_filter = f'(&{AD_CONFIG["search_filter"]}(lastLogonTimestamp>={one_month_ago_ts})(!(memberOf=OU=OUTPUTMESENGER,DC=zimg,DC=local)))'
+        
+        print(f"Searching with filter: {search_filter}")
+        print(f"Search base: {AD_CONFIG['search_base']}")
+        
         # Search for users
         conn.search(search_base=AD_CONFIG['search_base'],
-                   search_filter=AD_CONFIG['search_filter'],
+                   search_filter=search_filter,
                    search_scope=SUBTREE,
                    attributes=AD_CONFIG['attributes'])
         
+        print(f"Search completed. Found {len(conn.entries)} active users")
+        
         users = []
         for entry in conn.entries:
+            # Skip users in OUTPUTMESENGER OU
+            if hasattr(entry, 'distinguishedName'):
+                dn = str(entry.distinguishedName)
+                if 'OU=OUTPUTMESENGER' in dn:
+                    continue
+
+            # Convert lastLogonTimestamp to readable date if available
+            last_logon = "Unknown"
+            if hasattr(entry, 'lastLogonTimestamp') and entry.lastLogonTimestamp:
+                try:
+                    # Convert Windows filetime to datetime
+                    last_logon_ts = int(str(entry.lastLogonTimestamp))
+                    if last_logon_ts > 0:
+                        # Windows filetime starts from 1601-01-01
+                        windows_epoch = datetime.datetime(1601, 1, 1)
+                        delta = datetime.timedelta(microseconds=last_logon_ts / 10)
+                        last_logon_date = windows_epoch + delta
+                        last_logon = last_logon_date.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        last_logon = "Never"
+                except (ValueError, TypeError, AttributeError) as e:
+                    print(f"Error converting lastLogonTimestamp for user {entry.sAMAccountName}: {e}")
+                    last_logon = "Unknown"
+            
+            # Extract OU from distinguishedName
+            ou = "Unknown"
+            if hasattr(entry, 'distinguishedName'):
+                dn = str(entry.distinguishedName)
+                # Extract all OUs from DN (format: CN=username,OU=sub_ou,OU=parent_ou,DC=domain,DC=com)
+                ou_parts = [part[3:] for part in dn.split(',') if part.startswith('OU=')]
+                if ou_parts:
+                    # Join all OUs with ' > ' to show hierarchy
+                    ou = ' > '.join(reversed(ou_parts))
+            
             user_data = {
                 'username': str(entry.sAMAccountName),
                 'name': str(entry.displayName),
-                'department': str(entry.department) if hasattr(entry, 'department') else '',
-                'email': str(entry.mail) if hasattr(entry, 'mail') else ''
+                'ou': ou,
+                'last_logon': last_logon
             }
             users.append(user_data)
         
@@ -387,7 +440,8 @@ def fetch_ad_users():
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in fetch_ad_users: {str(e)}")
+        return jsonify({'error': f'خطا در دریافت اطلاعات کاربران از Active Directory: {str(e)}'}), 500
 
 @app.route('/api/import-ad-users', methods=['POST'])
 @login_required
@@ -412,13 +466,23 @@ def import_ad_users():
             new_user = User(
                 username=user['username'],
                 is_admin=False,
-                has_voted=False
+                has_voted=False,
+                is_imported=True  # Mark as imported from AD
             )
             # Generate a random password
             password = secrets.token_urlsafe(12)
             new_user.set_password(password)
             
             db.session.add(new_user)
+            
+            # Create employee record
+            new_employee = Employee(
+                name=user['name'],
+                department=user.get('ou', 'Unknown'),  # Use OU as department, default to 'Unknown' if not present
+                is_imported=True  # Mark as imported by admin
+            )
+            db.session.add(new_employee)
+            
             imported += 1
         
         db.session.commit()
@@ -438,6 +502,99 @@ def fetch_ous():
         return jsonify({'error': 'Unauthorized'}), 403
     
     try:
+        print("Starting fetch_ous...")
+        # Connect to AD
+        server = Server(AD_CONFIG['server'], get_info=ALL)
+        print(f"Connecting to AD server: {AD_CONFIG['server']}")
+        
+        conn = Connection(server, 
+                        user=AD_CONFIG['user_dn'],
+                        password=AD_CONFIG['password'],
+                        auto_bind=True)
+        print("Connected to AD server")
+        
+        # First search for all OUs
+        print("Searching for OUs...")
+        conn.search(search_base=AD_CONFIG['base_dn'],
+                   search_filter='(objectClass=organizationalUnit)',
+                   search_scope=SUBTREE,
+                   attributes=['name', 'distinguishedName'])
+        
+        print(f"Found {len(conn.entries)} OUs")
+        
+        # Get all OUs first
+        all_ous = {}
+        for entry in conn.entries:
+            if hasattr(entry, 'distinguishedName'):
+                dn = str(entry.distinguishedName)
+                name = str(entry.name) if hasattr(entry, 'name') else dn.split(',')[0].split('=')[1]
+                all_ous[dn] = {'name': name, 'active_users': 0}
+                print(f"Found OU: {name} ({dn})")
+        
+        # Calculate date 1 month ago in Windows filetime format
+        one_month_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+        windows_epoch = datetime.datetime(1601, 1, 1)
+        delta = one_month_ago - windows_epoch
+        one_month_ago_ts = int(delta.total_seconds() * 10000000)
+        
+        # Now search for active users
+        print("Searching for active users...")
+        user_filter = f'(&{AD_CONFIG["search_filter"]}(lastLogonTimestamp>={one_month_ago_ts}))'
+        conn.search(search_base=AD_CONFIG['base_dn'],
+                   search_filter=user_filter,
+                   search_scope=SUBTREE,
+                   attributes=['distinguishedName'])
+        
+        print(f"Found {len(conn.entries)} active users")
+        
+        # Count active users in each OU
+        for entry in conn.entries:
+            if hasattr(entry, 'distinguishedName'):
+                user_dn = str(entry.distinguishedName)
+                # Extract OU part from user's DN
+                ou_parts = [part for part in user_dn.split(',') if part.startswith('OU=')]
+                if ou_parts:
+                    # Get the immediate parent OU
+                    parent_ou = ','.join(user_dn.split(',')[1:])  # Remove CN part
+                    if parent_ou in all_ous:
+                        all_ous[parent_ou]['active_users'] += 1
+                        print(f"Incrementing active users for OU: {all_ous[parent_ou]['name']}")
+        
+        # Filter OUs with active users and exclude OUTPUTMESENGER
+        ous = [
+            {'name': ou_data['name'], 'active_users': ou_data['active_users']}
+            for ou_data in all_ous.values()
+            if ou_data['active_users'] > 0 and ou_data['name'].lower() != 'outputmesenger'
+        ]
+        
+        # Sort OUs by name
+        ous.sort(key=lambda x: x['name'])
+        
+        print(f"Returning {len(ous)} OUs with active users")
+        return jsonify({
+            'message': 'OUs fetched successfully',
+            'ous': ous
+        })
+        
+    except Exception as e:
+        print(f"Error in fetch_ous: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/fetch-ou-users', methods=['POST'])
+@login_required
+def fetch_ou_users():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.get_json()
+        ou_name = data.get('ou_name')
+        
+        if not ou_name:
+            return jsonify({'error': 'OU name is required'}), 400
+        
+        print(f"Fetching users for OU: {ou_name}")
+        
         # Connect to AD
         server = Server(AD_CONFIG['server'], get_info=ALL)
         conn = Connection(server, 
@@ -445,30 +602,59 @@ def fetch_ous():
                         password=AD_CONFIG['password'],
                         auto_bind=True)
         
-        # Search for all OUs
+        # Calculate date 1 month ago in Windows filetime format
+        one_month_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+        windows_epoch = datetime.datetime(1601, 1, 1)
+        delta = one_month_ago - windows_epoch
+        one_month_ago_ts = int(delta.total_seconds() * 10000000)
+        
+        # First, find the OU's distinguished name
+        print("Searching for OU's distinguished name...")
+        ou_filter = f'(name={ou_name})'
         conn.search(search_base=AD_CONFIG['base_dn'],
-                   search_filter='(objectClass=organizationalUnit)',
+                   search_filter=ou_filter,
                    search_scope=SUBTREE,
-                   attributes=['distinguishedName', 'name', 'description'])
+                   attributes=['distinguishedName'])
         
-        ous = []
+        if not conn.entries:
+            return jsonify({'error': f'OU {ou_name} not found'}), 404
+        
+        ou_dn = str(conn.entries[0].distinguishedName)
+        print(f"Found OU DN: {ou_dn}")
+        
+        # Now search for active users in this OU
+        search_filter = f'(&{AD_CONFIG["search_filter"]}(lastLogonTimestamp>={one_month_ago_ts}))'
+        print(f"Search filter: {search_filter}")
+        print(f"Search base: {ou_dn}")
+        
+        conn.search(search_base=ou_dn,
+                   search_filter=search_filter,
+                   search_scope=SUBTREE,
+                   attributes=AD_CONFIG['attributes'])
+        
+        print(f"Found {len(conn.entries)} active users in OU {ou_name}")
+        
+        users = []
         for entry in conn.entries:
-            ou_data = {
-                'dn': str(entry.distinguishedName),
-                'name': str(entry.name),
-                'description': str(entry.description) if hasattr(entry, 'description') else ''
+            # Skip users in OUTPUTMESENGER OU
+            if hasattr(entry, 'distinguishedName'):
+                dn = str(entry.distinguishedName)
+                if 'OU=OUTPUTMESENGER' in dn:
+                    continue
+            
+            user_data = {
+                'username': str(entry.sAMAccountName),
+                'name': str(entry.displayName)
             }
-            ous.append(ou_data)
-        
-        # Sort OUs by their DN length (to show hierarchy)
-        ous.sort(key=lambda x: len(x['dn']))
+            users.append(user_data)
         
         return jsonify({
-            'message': 'OUs fetched successfully',
-            'ous': ous
+            'message': f'Users in OU {ou_name} fetched successfully',
+            'users': users
         })
         
     except Exception as e:
+        print(f"Error in fetch_ou_users: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/voters-count')
@@ -499,6 +685,41 @@ def delete_votes():
         
         db.session.commit()
         return jsonify({'message': 'All votes have been deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/delete-ad-users', methods=['POST'])
+@login_required
+def delete_ad_users():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        # Get all users except the current admin user
+        users_to_delete = User.query.filter(User.id != current_user.id).all()
+        
+        # Count users before deletion
+        count = len(users_to_delete)
+        
+        # Delete all votes associated with these users
+        for user in users_to_delete:
+            Vote.query.filter_by(user_id=user.id).delete()
+        
+        # Delete all employees that were imported from AD
+        Employee.query.filter_by(is_imported=True).delete()
+        
+        # Delete all users
+        for user in users_to_delete:
+            db.session.delete(user)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Successfully deleted {count} users imported from Active Directory',
+            'count': count
+        })
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

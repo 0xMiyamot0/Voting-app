@@ -6,15 +6,7 @@ def init_db():
         db.create_all()
         
         # Check if database is empty
-        if User.query.first() is None:
-            # Add admin user
-            admin = User(username='admin', password='admin123', is_admin=True)
-            db.session.add(admin)
-            
-            # Add regular user
-            user = User(username='user', password='user123', is_admin=False)
-            db.session.add(user)
-            
+        if Employee.query.first() is None:
             # Add initial employees grouped by department
             employees = [
                 # فنی (Technical)
@@ -61,25 +53,8 @@ def init_db():
             for employee in employees:
                 db.session.add(employee)
             
-            # Add initial voters
-            voters = [
-                User(username='voter1', password='pass123', is_admin=False),
-                User(username='voter2', password='pass123', is_admin=False),
-                User(username='voter3', password='pass123', is_admin=False),
-                User(username='voter4', password='pass123', is_admin=False),
-                User(username='voter5', password='pass123', is_admin=False),
-                User(username='voter6', password='pass123', is_admin=False),
-                User(username='voter7', password='pass123', is_admin=False),
-                User(username='voter8', password='pass123', is_admin=False),
-                User(username='voter9', password='pass123', is_admin=False),
-                User(username='voter10', password='pass123', is_admin=False)
-            ]
-            
-            for voter in voters:
-                db.session.add(voter)
-            
             db.session.commit()
-            print("Database initialized with sample data!")
+            print("Database initialized with employee data!")
         else:
             print("Database already contains data. Skipping initialization.")
 
