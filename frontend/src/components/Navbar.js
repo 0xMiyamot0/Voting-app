@@ -11,7 +11,11 @@ import {
   Avatar,
   Tooltip,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Container,
+  Stack,
+  alpha,
+  Badge
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -24,7 +28,9 @@ import {
   HowToVote as VoteIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
   Info as InfoIcon,
-  Home as HomeIcon
+  Home as HomeIcon,
+  Menu as MenuIcon,
+  Person as PersonIcon
 } from '@mui/icons-material';
 import Logo from './Logo';
 
@@ -34,19 +40,20 @@ const isEnglishText = (text) => {
 };
 
 const menuItems = [
-  { text: 'خانه', icon: <HomeIcon />, path: '/' },
-  { text: 'رای‌دهی', icon: <VoteIcon />, path: '/voting' },
-  { text: 'نتایج', icon: <BarChartIcon />, path: '/results' },
-  { text: 'درباره ما', icon: <InfoIcon />, path: '/about' },
+  { name: 'رای‌دهی', path: '/voting' },
+  { name: 'نتایج', path: '/results' },
+  { name: 'درباره', path: '/about' }
 ];
 
 const Navbar = () => {
   const { isAuthenticated, isAdmin, logout, user } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [anchorEl, setAnchorEl] = useState(null);
+  const [mobileMenuAnchor, setMobileMenuAnchor] = useState(null);
   const open = Boolean(anchorEl);
+  const mobileMenuOpen = Boolean(mobileMenuAnchor);
 
   const handleLogout = async () => {
     await logout();
@@ -61,193 +68,241 @@ const Navbar = () => {
     setAnchorEl(null);
   };
 
+  const handleMobileMenu = (event) => {
+    setMobileMenuAnchor(event.currentTarget);
+  };
+
+  const handleMobileMenuClose = () => {
+    setMobileMenuAnchor(null);
+  };
+
   const handleNavigate = (path) => {
     navigate(path);
     handleClose();
+    handleMobileMenuClose();
   };
 
   return (
     <AppBar 
-      position="static" 
+      position="sticky" 
       elevation={0}
       sx={{ 
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        background: 'linear-gradient(to right, #3f51b5, #5c6bc0)',
+        background: 'transparent',
+        backdropFilter: 'blur(8px)',
+        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        py: 1
       }}
     >
-      <Toolbar sx={{ justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Logo />
-        </Box>
-        
-        <Typography 
-          variant="h6" 
-          component="div" 
-          sx={{ 
-            fontWeight: 600,
-            textAlign: 'center',
-            flexGrow: 1,
-            display: { xs: 'none', sm: 'block' }
-          }}
-        >
-          سیستم نظرسنجی کارمند نمونه گروه صنعتی معدنی زرین
-        </Typography>
-        
-        <Box>
-          {isAuthenticated ? (
-            <>
-              {isMobile ? (
-                <>
-                  <IconButton
-                    size="large"
-                    aria-label="account of current user"
-                    aria-controls="menu-appbar"
-                    aria-haspopup="true"
-                    onClick={handleMenu}
-                    color="inherit"
-                  >
-                    <AccountCircleIcon />
-                  </IconButton>
-                  <Menu
-                    id="menu-appbar"
-                    anchorEl={anchorEl}
-                    anchorOrigin={{
-                      vertical: 'bottom',
-                      horizontal: 'right',
+      <Container maxWidth="lg">
+        <Toolbar disableGutters sx={{ justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Logo />
+            {!isMobile && (
+              <Stack direction="row" spacing={3}>
+                {menuItems.map((item) => (
+                  <Button
+                    key={item.name}
+                    component={Link}
+                    to={item.path}
+                    startIcon={item.icon}
+                    sx={{
+                      color: 'text.primary',
+                      gap: 1,
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                      },
                     }}
-                    keepMounted
-                    transformOrigin={{
-                      vertical: 'top',
-                      horizontal: 'right',
-                    }}
-                    open={open}
-                    onClose={handleClose}
                   >
-                    {/* Admin Menu Items */}
-                    {isAdmin && (
-                      <>
-                        <MenuItem 
-                          component={Link} 
-                          to="/admin" 
-                          onClick={handleClose}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            color: 'text.primary',
-                            '&:hover': {
-                              backgroundColor: 'rgba(0, 120, 212, 0.08)',
-                            },
-                          }}
-                        >
-                          <AdminPanelSettingsIcon sx={{ color: '#0078D4' }} />
-                          <Typography>پنل مدیریت</Typography>
-                        </MenuItem>
-                        <MenuItem 
-                          component={Link} 
-                          to="/voting" 
-                          onClick={handleClose}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            color: 'text.primary',
-                            '&:hover': {
-                              backgroundColor: 'rgba(0, 120, 212, 0.08)',
-                            },
-                          }}
-                        >
-                          <VoteIcon sx={{ color: '#0078D4' }} />
-                          <Typography>رای‌دهی</Typography>
-                        </MenuItem>
-                      </>
-                    )}
-                    <MenuItem onClick={() => handleNavigate('/results')}>
-                      <BarChartIcon sx={{ mr: 1 }} /> نتایج
+                    {item.name}
+                  </Button>
+                ))}
+              </Stack>
+            )}
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {isMobile ? (
+              <>
+                {isAuthenticated && (
+                  <Typography variant="subtitle2" sx={{ color: 'text.secondary', mr: 1 }}>
+                    {user?.name}
+                  </Typography>
+                )}
+                <IconButton
+                  size="large"
+                  onClick={handleMobileMenu}
+                  color="inherit"
+                  sx={{ color: 'text.primary' }}
+                >
+                  <MenuIcon />
+                </IconButton>
+                <Menu
+                  anchorEl={mobileMenuAnchor}
+                  open={mobileMenuOpen}
+                  onClose={handleMobileMenuClose}
+                  PaperProps={{
+                    sx: {
+                      mt: 1.5,
+                      minWidth: 200,
+                      borderRadius: 2,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                    }
+                  }}
+                >
+                  {menuItems.map((item) => (
+                    <MenuItem
+                      key={item.name}
+                      component={Link}
+                      to={item.path}
+                      onClick={handleMobileMenuClose}
+                      sx={{
+                        py: 1.5,
+                        px: 2,
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        {item.icon}
+                        <Typography>{item.name}</Typography>
+                      </Box>
                     </MenuItem>
-                    <MenuItem onClick={handleLogout}>
-                      <LogoutIcon sx={{ mr: 1 }} /> خروج
-                    </MenuItem>
-                  </Menu>
-                </>
-              ) : (
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  {isAdmin && (
+                  ))}
+                  {isAuthenticated && (
                     <>
-                      <Button 
-                        color="inherit" 
-                        onClick={() => navigate('/admin')}
-                        startIcon={<DashboardIcon />}
-                        sx={{ 
-                          borderRadius: 2,
+                      {isAdmin && (
+                        <MenuItem
+                          component={Link}
+                          to="/admin"
+                          onClick={handleMobileMenuClose}
+                          sx={{
+                            py: 1.5,
+                            px: 2,
+                            '&:hover': {
+                              backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                            },
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <AdminPanelSettingsIcon sx={{ fontSize: 24 }} />
+                            <Typography>پنل مدیریت</Typography>
+                          </Box>
+                        </MenuItem>
+                      )}
+                      <MenuItem
+                        onClick={handleLogout}
+                        sx={{
+                          py: 1.5,
+                          px: 2,
                           '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                          }
+                            backgroundColor: alpha(theme.palette.error.main, 0.08),
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <LogoutIcon sx={{ fontSize: 24 }} />
+                          <Typography>خروج</Typography>
+                        </Box>
+                      </MenuItem>
+                    </>
+                  )}
+                </Menu>
+              </>
+            ) : (
+              <>
+                {isAuthenticated ? (
+                  <>
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+                      {user?.name}
+                    </Typography>
+                    {isAdmin && (
+                      <Button
+                        variant="contained"
+                        onClick={() => navigate('/admin')}
+                        sx={{
+                          borderRadius: 2,
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          '&:hover': {
+                            backgroundColor: 'primary.dark',
+                          },
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          transition: 'all 0.3s ease',
+                          '&:active': {
+                            transform: 'scale(0.98)',
+                          },
                         }}
                       >
                         پنل مدیریت
                       </Button>
-                      <Button 
-                        color="inherit" 
-                        onClick={() => navigate('/voting')}
-                        startIcon={<VoteIcon />}
-                        sx={{ 
-                          borderRadius: 2,
+                    )}
+                    <Tooltip title="پروفایل کاربری">
+                      <IconButton
+                        onClick={handleMenu}
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          backgroundColor: alpha(theme.palette.primary.main, 0.1),
                           '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                          }
+                            backgroundColor: alpha(theme.palette.primary.main, 0.2),
+                          },
                         }}
                       >
-                        رای‌دهی
-                      </Button>
-                    </>
-                  )}
-                  <Button 
-                    color="inherit" 
-                    onClick={() => navigate('/results')}
-                    startIcon={<BarChartIcon />}
-                    sx={{ 
+                        <PersonIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Menu
+                      anchorEl={anchorEl}
+                      open={open}
+                      onClose={handleClose}
+                      PaperProps={{
+                        sx: {
+                          mt: 1.5,
+                          minWidth: 200,
+                          borderRadius: 2,
+                          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                        }
+                      }}
+                    >
+                      <MenuItem
+                        onClick={handleLogout}
+                        sx={{
+                          py: 1.5,
+                          px: 2,
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.error.main, 0.08),
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <LogoutIcon sx={{ fontSize: 24 }} />
+                          <Typography>خروج</Typography>
+                        </Box>
+                      </MenuItem>
+                    </Menu>
+                  </>
+                ) : (
+                  <Button
+                    variant="contained"
+                    onClick={() => navigate('/login')}
+                    startIcon={<LoginIcon sx={{ fontSize: 20 }} />}
+                    sx={{
                       borderRadius: 2,
+                      backgroundColor: 'primary.main',
                       '&:hover': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      }
+                        backgroundColor: 'primary.dark',
+                      },
                     }}
                   >
-                    نتایج
+                    ورود
                   </Button>
-                  <Button 
-                    color="inherit" 
-                    onClick={handleLogout}
-                    startIcon={<LogoutIcon />}
-                    sx={{ 
-                      borderRadius: 2,
-                      '&:hover': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      }
-                    }}
-                  >
-                    خروج
-                  </Button>
-                </Box>
-              )}
-            </>
-          ) : (
-            <Button 
-              color="inherit" 
-              onClick={() => navigate('/login')}
-              startIcon={<LoginIcon />}
-              sx={{ 
-                borderRadius: 2,
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                }
-              }}
-            >
-              ورود
-            </Button>
-          )}
-        </Box>
-      </Toolbar>
+                )}
+              </>
+            )}
+          </Box>
+        </Toolbar>
+      </Container>
     </AppBar>
   );
 };

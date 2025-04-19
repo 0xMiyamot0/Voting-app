@@ -28,13 +28,18 @@ import {
     Card,
     CardContent,
     Grid,
-    Chip
+    Chip,
+    Select,
+    MenuItem,
+    FormControl,
+    InputLabel
 } from '@mui/material';
 import {
     Folder as FolderIcon,
     ArrowBack as ArrowBackIcon,
     Delete as DeleteIcon,
-    Person as PersonIcon
+    Person as PersonIcon,
+    Business as BusinessIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -51,14 +56,26 @@ const ADUserImport = () => {
     const [openGroupDialog, setOpenGroupDialog] = useState(false);
     const [selectedTargetGroup, setSelectedTargetGroup] = useState('');
     const [availableGroups] = useState([
-        { name: 'azmc', label: 'AZMC' },
-        { name: 'it', label: 'IT' },
-        { name: 'hr', label: 'HR' },
-        { name: 'finance', label: 'Finance' },
-        { name: 'marketing', label: 'Marketing' },
-        { name: 'sales', label: 'Sales' },
-        { name: 'operations', label: 'Operations' },
-        { name: 'management', label: 'Management' }
+        { name: 'zmg', label: 'زرین معدن آسیا' },
+        { name: 'airmat', label: 'آیرمت' },
+        { name: 'bazargani', label: 'بازرگانی' },
+        { name: 'etemad', label: 'اعتماد ایرانیان' },
+        { name: 'flat', label: 'فلات زرین کیمیا' },
+        { name: 'lead', label: 'سرب و روی ایرانیان' },
+        { name: 'it', label: 'فناوری اطلاعات' },
+        { name: 'gostaresh', label: 'گسترش روی ایرانیان' },
+        { name: 'kimia', label: 'کیمیای زنجان گستران' },
+        { name: 'legal', label: 'واحد حقوقی' },
+        { name: 'mahdiabad', label: 'مهدی آباد' },
+        { name: 'middleeast', label: 'خاورمیانه' },
+        { name: 'management', label: 'مدیریت' },
+        { name: 'office', label: 'مسئولین دفاتر' },
+        { name: 'simin', label: 'سیمین معدن' },
+        { name: 'procurement', label: 'تدارکات' },
+        { name: 'zobgaran', label: 'ذوبگران رنگین فلز' },
+        { name: 'caspian', label: 'زرین روی کاسپین' },
+        { name: 'transport', label: 'زرین ترابر' },
+        { name: 'other', label: 'سایر' }
     ]);
 
     const fetchOUs = async () => {
@@ -211,7 +228,7 @@ const ADUserImport = () => {
                 <Button
                     variant="outlined"
                     color="error"
-                    onClick={deleteAllADUsers}
+                    onClick={handleDeleteDialogOpen}
                     disabled={loading}
                     sx={{
                         borderRadius: 2,
@@ -222,92 +239,7 @@ const ADUserImport = () => {
                 </Button>
             </Box>
 
-            {selectedOU ? (
-                <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-                    <CardContent>
-                        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <IconButton 
-                                onClick={handleBackToOUs}
-                                sx={{ 
-                                    backgroundColor: '#f5f5f5',
-                                    '&:hover': { backgroundColor: '#e0e0e0' }
-                                }}
-                            >
-                                <ArrowBackIcon />
-                            </IconButton>
-                            <Typography variant="h6" sx={{ color: '#1a237e' }}>
-                                کاربران OU: {selectedOU}
-                            </Typography>
-                        </Box>
-
-                        <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
-                            <Table>
-                                <TableHead>
-                                    <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                        <TableCell padding="checkbox">
-                                            <Checkbox
-                                                checked={selectedUsers.length === users.length}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setSelectedUsers(users.map(u => u.username));
-                                                    } else {
-                                                        setSelectedUsers([]);
-                                                    }
-                                                }}
-                                            />
-                                        </TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>نام کاربری</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>نام</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {users.map((user) => (
-                                        <TableRow 
-                                            key={user.username}
-                                            sx={{ 
-                                                '&:hover': { backgroundColor: '#f8f9fa' },
-                                                transition: 'background-color 0.2s'
-                                            }}
-                                        >
-                                            <TableCell padding="checkbox">
-                                                <Checkbox
-                                                    checked={selectedUsers.includes(user.username)}
-                                                    onChange={() => handleUserSelect(user.username)}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <PersonIcon sx={{ color: '#666' }} />
-                                                    {user.username}
-                                                </Box>
-                                            </TableCell>
-                                            <TableCell>{user.name}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-
-                        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                            <Button
-                                variant="contained"
-                                onClick={handleImport}
-                                disabled={loading || selectedUsers.length === 0}
-                                sx={{
-                                    backgroundColor: '#1a237e',
-                                    '&:hover': {
-                                        backgroundColor: '#0d47a1'
-                                    },
-                                    borderRadius: 2,
-                                    padding: '8px 24px'
-                                }}
-                            >
-                                وارد کردن کاربران انتخاب شده
-                            </Button>
-                        </Box>
-                    </CardContent>
-                </Card>
-            ) : (
+            {!selectedOU && (
                 <Grid container spacing={3}>
                     <Grid item xs={12}>
                         <Card sx={{ 
@@ -371,6 +303,126 @@ const ADUserImport = () => {
                         </Card>
                     </Grid>
                 </Grid>
+            )}
+
+            {selectedOU && users.length > 0 && (
+                <Card sx={{ borderRadius: 2, boxShadow: 3, mt: 3 }}>
+                    <CardContent>
+                        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <IconButton 
+                                    onClick={handleBackToOUs}
+                                    sx={{ 
+                                        backgroundColor: '#f5f5f5',
+                                        '&:hover': { backgroundColor: '#e0e0e0' }
+                                    }}
+                                >
+                                    <ArrowBackIcon />
+                                </IconButton>
+                                <Typography variant="h6" sx={{ color: '#1a237e' }}>
+                                    کاربران OU: {selectedOU}
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <FormControl sx={{ minWidth: 200 }}>
+                                    <InputLabel>انتخاب دسته‌بندی</InputLabel>
+                                    <Select
+                                        value={selectedTargetGroup}
+                                        onChange={(e) => setSelectedTargetGroup(e.target.value)}
+                                        label="انتخاب دسته‌بندی"
+                                        sx={{ 
+                                            backgroundColor: 'white',
+                                            borderRadius: 2
+                                        }}
+                                    >
+                                        {availableGroups.map((group) => (
+                                            <MenuItem key={group.name} value={group.name}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <BusinessIcon sx={{ fontSize: 20 }} />
+                                                    <Typography>{group.label}</Typography>
+                                                </Box>
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                                <Button
+                                    variant="contained"
+                                    onClick={handleImport}
+                                    disabled={!selectedTargetGroup || selectedUsers.length === 0}
+                                    sx={{
+                                        backgroundColor: '#1a237e',
+                                        '&:hover': {
+                                            backgroundColor: '#0d47a1'
+                                        },
+                                        borderRadius: 2,
+                                        padding: '8px 24px'
+                                    }}
+                                >
+                                    {loading ? <CircularProgress size={24} /> : 'وارد کردن کاربران'}
+                                </Button>
+                            </Box>
+                        </Box>
+
+                        <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
+                            <Table>
+                                <TableHead>
+                                    <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                                        <TableCell padding="checkbox">
+                                            <Checkbox
+                                                checked={selectedUsers.length === users.length}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedUsers(users.map(user => user.username));
+                                                    } else {
+                                                        setSelectedUsers([]);
+                                                    }
+                                                }}
+                                            />
+                                        </TableCell>
+                                        <TableCell>نام کاربری</TableCell>
+                                        <TableCell>نام</TableCell>
+                                        <TableCell>نام خانوادگی</TableCell>
+                                        <TableCell>ایمیل</TableCell>
+                                        <TableCell>دسته‌بندی</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {users.map((user) => (
+                                        <TableRow key={user.username}>
+                                            <TableCell padding="checkbox">
+                                                <Checkbox
+                                                    checked={selectedUsers.includes(user.username)}
+                                                    onChange={() => handleUserSelect(user.username)}
+                                                />
+                                            </TableCell>
+                                            <TableCell>{user.username}</TableCell>
+                                            <TableCell>{user.firstName}</TableCell>
+                                            <TableCell>{user.lastName}</TableCell>
+                                            <TableCell>{user.email}</TableCell>
+                                            <TableCell>
+                                                {user.department ? (
+                                                    <Chip
+                                                        label={availableGroups.find(g => g.name === user.department)?.label || user.department}
+                                                        color="primary"
+                                                        size="small"
+                                                        sx={{ borderRadius: 1 }}
+                                                    />
+                                                ) : (
+                                                    <Chip
+                                                        label="بدون دسته‌بندی"
+                                                        color="default"
+                                                        size="small"
+                                                        sx={{ borderRadius: 1 }}
+                                                    />
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </CardContent>
+                </Card>
             )}
 
             {/* Group Selection Dialog */}

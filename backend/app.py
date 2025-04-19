@@ -12,6 +12,7 @@ from ldap3 import Server, Connection, ALL, SUBTREE, NTLM
 from ad_config import AD_CONFIG
 import re
 from flask_migrate import Migrate
+from jdatetime import datetime as jdatetime
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -35,10 +36,10 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    has_voted = db.Column(db.Boolean, default=False)
     reset_token = db.Column(db.String(100), unique=True)
     reset_token_expires = db.Column(db.DateTime)
     is_imported = db.Column(db.Boolean, default=False)  # Flag to indicate if user was imported from AD
+    last_vote_date = db.Column(db.DateTime)  # تاریخ آخرین رای
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -58,6 +59,11 @@ class Vote(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
     ratings = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'employee_id', name='unique_user_employee_vote'),
+    )
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -81,7 +87,15 @@ def authenticate_ad_user(username, password):
             
             if len(conn.entries) > 0:
                 user_data = conn.entries[0]
-                is_admin = any('CN=Domain Admins' in str(group) for group in user_data.memberOf)
+                # Check for admin group membership
+                is_admin = False
+                if hasattr(user_data, 'memberOf'):
+                    admin_groups = ['CN=Domain Admins', 'CN=Enterprise Admins', 'CN=Administrators']
+                    for group in user_data.memberOf:
+                        if any(admin_group in str(group) for admin_group in admin_groups):
+                            is_admin = True
+                            break
+                
                 return {
                     'success': True,
                     'user_info': {
@@ -93,6 +107,7 @@ def authenticate_ad_user(username, password):
                 }
         return {'success': False, 'error': 'Invalid credentials'}
     except Exception as e:
+        print(f"AD Authentication error: {str(e)}")  # Add debug logging
         return {'success': False, 'error': str(e)}
 
 @app.route('/api/login', methods=['POST'])
@@ -113,7 +128,6 @@ def login():
             user = User(
                 username=username,
                 is_admin=auth_result['user_info']['is_admin'],
-                has_voted=False
             )
             # Set a random password for local DB (won't be used for login)
             user.set_password(secrets.token_urlsafe(32))
@@ -132,7 +146,6 @@ def login():
                 'id': user.id,
                 'username': user.username,
                 'is_admin': user.is_admin,
-                'has_voted': user.has_voted,
                 'name': auth_result['user_info']['display_name'],
                 'department': auth_result['user_info']['department']
             }
@@ -148,7 +161,6 @@ def login():
                 'id': user.id,
                 'username': user.username,
                 'is_admin': user.is_admin,
-                'has_voted': user.has_voted,
                 'name': username
             }
         })
@@ -160,7 +172,6 @@ def login():
 def check_auth():
     return jsonify({
         'is_admin': current_user.is_admin,
-        'has_voted': current_user.has_voted
     })
 
 @app.route('/api/employees')
@@ -187,48 +198,79 @@ def get_employees():
 @login_required
 def vote():
     try:
-        if current_user.has_voted:
-            return jsonify({'error': 'You have already voted'}), 400
-        
         data = request.get_json()
-        if not data or 'ratings' not in data:
+        print("Received vote data:", data)
+        
+        if not data:
             return jsonify({'error': 'Invalid request data'}), 400
             
+        if 'employeeId' not in data:
+            return jsonify({'error': 'Employee ID is required'}), 400
+            
+        if 'ratings' not in data:
+            return jsonify({'error': 'Ratings are required'}), 400
+            
+        employee_id = data['employeeId']
         ratings = data['ratings']
         
-        # Validate ratings data structure
-        for employee_id, criteria_ratings in ratings.items():
-            if not Employee.query.get(employee_id):
-                return jsonify({'error': f'Employee with ID {employee_id} not found'}), 404
-            
-            # Check if all criteria have ratings
-            if len(criteria_ratings) != 6:
-                return jsonify({'error': 'All criteria must be rated'}), 400
-            
-            # Validate rating values (1-5)
-            for criteria_id, rating in criteria_ratings.items():
-                if not isinstance(rating, int) or rating < 1 or rating > 5:
-                    return jsonify({'error': 'Invalid rating value'}), 400
+        # Check if employee exists
+        employee = Employee.query.get(employee_id)
+        if not employee:
+            return jsonify({'error': 'Employee not found'}), 404
         
-        # Record votes
-        for employee_id, criteria_ratings in ratings.items():
-            employee = Employee.query.get(employee_id)
-            # Calculate average rating
-            avg_rating = sum(criteria_ratings.values()) / len(criteria_ratings)
-            employee.votes += avg_rating
-            vote = Vote(
-                user_id=current_user.id,
-                employee_id=employee_id,
-                ratings=criteria_ratings
-            )
-            db.session.add(vote)
+        # Check if user has already voted for this employee
+        existing_vote = Vote.query.filter_by(
+            user_id=current_user.id,
+            employee_id=employee_id
+        ).first()
         
-        current_user.has_voted = True
+        if existing_vote:
+            return jsonify({'error': 'You have already voted for this employee'}), 400
+        
+        # Check if user has voted this month
+        if current_user.last_vote_date:
+            last_vote_jdate = jdatetime.fromgregorian(datetime=current_user.last_vote_date)
+            current_jdate = jdatetime.now()
+            
+            if last_vote_jdate.month == current_jdate.month and last_vote_jdate.year == current_jdate.year:
+                return jsonify({'error': 'شما در این ماه قبلاً رای داده‌اید'}), 400
+        
+        # Check if user has reached the maximum number of votes
+        user_votes = Vote.query.filter_by(user_id=current_user.id).count()
+        if user_votes >= 3:
+            return jsonify({'error': 'You have reached the maximum number of votes (3)'}), 400
+        
+        # Validate ratings
+        if not isinstance(ratings, dict):
+            return jsonify({'error': 'Invalid ratings format'}), 400
+            
+        if len(ratings) != 6:
+            return jsonify({'error': 'All criteria must be rated'}), 400
+        
+        for criteria_id, rating in ratings.items():
+            if not isinstance(rating, int) or rating < 1 or rating > 5:
+                return jsonify({'error': f'Invalid rating value for criteria {criteria_id}: {rating}'}), 400
+        
+        # Create new vote
+        vote = Vote(
+            user_id=current_user.id,
+            employee_id=employee_id,
+            ratings=ratings
+        )
+        
+        # Update employee votes
+        employee.votes = (employee.votes or 0) + 1
+        
+        # Update user's last vote date
+        current_user.last_vote_date = datetime.datetime.utcnow()
+        
+        db.session.add(vote)
         db.session.commit()
+        
         return jsonify({'message': 'Vote recorded successfully'})
         
     except Exception as e:
-        db.session.rollback()
+        print(f"Error in vote endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/results')
@@ -237,13 +279,65 @@ def get_results():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
     
-    employees = Employee.query.order_by(Employee.votes.desc()).all()
-    return jsonify([{
-        'id': emp.id,
-        'name': emp.name,
-        'department': emp.department,
-        'votes': emp.votes
-    } for emp in employees])
+    try:
+        selected_month = request.args.get('month')  # Get selected month from query parameters
+        
+        # Get all votes with their employees
+        votes_query = db.session.query(Vote, Employee).join(Employee)
+        
+        # If a specific month is selected, filter the votes
+        if selected_month:
+            votes = votes_query.all()
+            filtered_votes = []
+            
+            for vote, employee in votes:
+                vote_date = jdatetime.fromgregorian(datetime=vote.created_at)
+                if str(vote_date.month) == selected_month:
+                    filtered_votes.append((vote, employee))
+            
+            # Create a dictionary to store aggregated votes for each employee
+            employee_votes = {}
+            for vote, employee in filtered_votes:
+                if employee.id not in employee_votes:
+                    employee_votes[employee.id] = {
+                        'id': employee.id,
+                        'name': employee.name,
+                        'department': employee.department,
+                        'votes': 0,
+                        'total_rating': 0
+                    }
+                employee_votes[employee.id]['votes'] += 1
+                employee_votes[employee.id]['total_rating'] += sum(vote.ratings.values()) / len(vote.ratings)
+            
+            # Convert to list and calculate average ratings
+            results = []
+            for emp_data in employee_votes.values():
+                if emp_data['votes'] > 0:
+                    results.append({
+                        'id': emp_data['id'],
+                        'name': emp_data['name'],
+                        'department': emp_data['department'],
+                        'votes': emp_data['votes']
+                    })
+            
+            # Sort by number of votes
+            results.sort(key=lambda x: x['votes'], reverse=True)
+            
+        else:
+            # If no month selected, return all results
+            employees = Employee.query.order_by(Employee.votes.desc()).all()
+            results = [{
+                'id': emp.id,
+                'name': emp.name,
+                'department': emp.department,
+                'votes': emp.votes
+            } for emp in employees]
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        print(f"Error in get_results: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/logout', methods=['POST'])
 @login_required
@@ -296,7 +390,6 @@ def upload_voters():
                 user = User(
                     username=row['username'],
                     is_admin=row.get('is_admin', False),
-                    has_voted=False
                 )
                 user.set_password(row['password'])
                 db.session.add(user)
@@ -485,7 +578,6 @@ def import_ad_users():
             new_user = User(
                 username=user['username'],
                 is_admin=False,
-                has_voted=False,
                 is_imported=True  # Mark as imported from AD
             )
             # Generate a random password
@@ -699,8 +791,6 @@ def delete_votes():
         Vote.query.delete()
         # Reset vote counts for all employees
         Employee.query.update({Employee.votes: 0})
-        # Reset has_voted for all users
-        User.query.update({User.has_voted: False})
         
         db.session.commit()
         return jsonify({'message': 'All votes have been deleted successfully'})
@@ -742,6 +832,79 @@ def delete_ad_users():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vote/status', methods=['GET'])
+@login_required
+def get_vote_status():
+    try:
+        votes = Vote.query.filter_by(user_id=current_user.id).all()
+        voted_employees = [vote.employee_id for vote in votes]
+        
+        return jsonify({
+            'hasVoted': len(votes) >= 3,
+            'votesCount': len(votes),
+            'votesRemaining': max(0, 3 - len(votes)),
+            'votedEmployees': voted_employees
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/employee/<int:employee_id>/ratings', methods=['GET'])
+@login_required
+def get_employee_ratings(employee_id):
+    try:
+        # Get employee details
+        employee = Employee.query.get(employee_id)
+        if not employee:
+            return jsonify({'message': 'کارمند یافت نشد'}), 404
+
+        # Get all votes for this employee
+        votes = Vote.query.filter_by(employee_id=employee_id).all()
+        
+        # Get voter names
+        voter_names = {}
+        for vote in votes:
+            voter = User.query.get(vote.user_id)
+            if voter:
+                voter_names[vote.user_id] = voter.username
+
+        # Calculate average rating for each criterion
+        criteria_ratings = {str(i): {'total': 0, 'count': 0} for i in range(1, 7)}
+        for vote in votes:
+            for i in range(1, 7):
+                rating = vote.ratings.get(str(i), 0)
+                criteria_ratings[str(i)]['total'] += rating
+                criteria_ratings[str(i)]['count'] += 1
+
+        # Calculate averages
+        criteria_averages = {}
+        for i in range(1, 7):
+            if criteria_ratings[str(i)]['count'] > 0:
+                criteria_averages[str(i)] = criteria_ratings[str(i)]['total'] / criteria_ratings[str(i)]['count']
+            else:
+                criteria_averages[str(i)] = 0
+
+        # Format response
+        response = {
+            'id': employee.id,
+            'name': employee.name,
+            'department': employee.department,
+            'votes': len(votes),
+            'criteriaAverages': criteria_averages,
+            'ratings': [
+                {
+                    'voterName': voter_names.get(vote.user_id, 'ناشناس'),
+                    'criteriaRatings': vote.ratings,
+                    'averageScore': sum(vote.ratings.values()) / 6,
+                    'date': vote.created_at.isoformat()
+                }
+                for vote in votes
+            ]
+        }
+
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'message': f'خطا در دریافت اطلاعات: {str(e)}'}), 500
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']

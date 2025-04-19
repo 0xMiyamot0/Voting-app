@@ -2,206 +2,390 @@ import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
+    Container,
+    Paper,
+    Grid,
     Card,
     CardContent,
-    Grid,
+    Rating,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
     Table,
     TableBody,
     TableCell,
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
-    LinearProgress,
     Chip,
-    Avatar,
-    Alert,
-    Container,
-    Zoom,
-    Button,
+    useTheme,
+    useMediaQuery,
     IconButton,
-    Tooltip
+    Tooltip,
+    Divider,
+    LinearProgress,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Snackbar,
+    Alert,
+    TableSortLabel
 } from '@mui/material';
 import {
     BarChart as BarChartIcon,
     People as PeopleIcon,
     HowToVote as VoteIcon,
-    Refresh as RefreshIcon
+    Refresh as RefreshIcon,
+    Star as StarIcon,
+    TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
+import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import { toJalaali } from 'jalaali-js';
 
-function Results() {
+const Results = () => {
+    const { isAuthenticated, isAdmin } = useAuth();
     const [results, setResults] = useState([]);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [totalVotes, setTotalVotes] = useState(0);
-    const [totalVoters, setTotalVoters] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const [employeeDetails, setEmployeeDetails] = useState(null);
+    const [openDialog, setOpenDialog] = useState(false);
+    const [selectedMonth, setSelectedMonth] = useState('');
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+    const criteriaLabels = {
+        '1': 'تعهد کاری',
+        '2': 'مسئولیت پذیری',
+        '3': 'خلاقیت و نوآوری',
+        '4': 'کار تیمی',
+        '5': 'انضباط کاری',
+        '6': 'مهارت های فنی'
+    };
+
+    const persianMonths = [
+        { value: '1', label: 'فروردین' },
+        { value: '2', label: 'اردیبهشت' },
+        { value: '3', label: 'خرداد' },
+        { value: '4', label: 'تیر' },
+        { value: '5', label: 'مرداد' },
+        { value: '6', label: 'شهریور' },
+        { value: '7', label: 'مهر' },
+        { value: '8', label: 'آبان' },
+        { value: '9', label: 'آذر' },
+        { value: '10', label: 'دی' },
+        { value: '11', label: 'بهمن' },
+        { value: '12', label: 'اسفند' }
+    ];
+
+    useEffect(() => {
+        // Set current Persian month as default
+        const currentDate = new Date();
+        const jalaliDate = toJalaali(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate());
+        setSelectedMonth(jalaliDate.jm.toString());
+    }, []);
+
+    useEffect(() => {
+        fetchResults();
+    }, [selectedMonth]);
 
     const fetchResults = async () => {
-        setLoading(true);
-        setError('');
         try {
-            // Fetch results
-            const resultsResponse = await axios.get('/api/results');
-            setResults(resultsResponse.data);
-            
-            // Calculate total votes
-            const total = resultsResponse.data.reduce((sum, emp) => sum + emp.votes, 0);
-            setTotalVotes(total);
-            
-            // Fetch total voters
-            const votersResponse = await axios.get('/api/voters-count');
-            setTotalVoters(votersResponse.data.count);
+            const response = await axios.get('/api/results', {
+                params: {
+                    month: selectedMonth
+                }
+            });
+            setResults(response.data);
         } catch (err) {
-            setError(err.response?.data?.error || 'خطا در دریافت نتایج');
-            console.error(err);
+            setError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        fetchResults();
-    }, []);
-
-    const handleRefresh = () => {
-        fetchResults();
+    const handleEmployeeClick = async (employee) => {
+        if (!isAdmin) return;
+        
+        setSelectedEmployee(employee);
+        try {
+            const response = await axios.get(`/api/employee/${employee.id}/ratings`);
+            setEmployeeDetails(response.data);
+            setOpenDialog(true);
+        } catch (err) {
+            setError('خطا در دریافت جزئیات: ' + (err.response?.data?.message || err.message));
+        }
     };
+
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        const jalaliDate = toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
+        return `${jalaliDate.jy}/${jalaliDate.jm}/${jalaliDate.jd}`;
+    };
+
+    if (!isAuthenticated) {
+        return (
+            <Container maxWidth="lg">
+                <Paper sx={{ p: 3, mt: 3, textAlign: 'center' }}>
+                    <Typography variant="h6" color="error">
+                        لطفاً برای مشاهده نتایج وارد شوید
+                    </Typography>
+                </Paper>
+            </Container>
+        );
+    }
+
+    if (loading) {
+        return (
+            <Container maxWidth="lg">
+                <Box sx={{ width: '100%', mt: 3 }}>
+                    <LinearProgress />
+                </Box>
+            </Container>
+        );
+    }
 
     return (
         <Container maxWidth="lg">
-            <Zoom in={true} timeout={500}>
-                <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center' }}>
-                            <BarChartIcon sx={{ mr: 2, color: 'primary.main' }} />
-                            داشبورد نتایج رای‌گیری
-                        </Typography>
+            <Box sx={{ mb: 4 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                        نتایج رای‌گیری
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <FormControl sx={{ minWidth: 120 }}>
+                            <InputLabel>ماه</InputLabel>
+                            <Select
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                label="ماه"
+                                sx={{ 
+                                    '& .MuiSelect-select': { 
+                                        textAlign: 'right',
+                                        paddingRight: '14px'
+                                    }
+                                }}
+                            >
+                                <MenuItem value="">
+                                    <em>همه ماه‌ها</em>
+                                </MenuItem>
+                                {persianMonths.map((month) => (
+                                    <MenuItem key={month.value} value={month.value}>
+                                        {month.label}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
                         <Tooltip title="به‌روزرسانی نتایج">
-                            <IconButton onClick={handleRefresh} color="primary">
+                            <IconButton onClick={fetchResults} color="primary">
                                 <RefreshIcon />
                             </IconButton>
                         </Tooltip>
                     </Box>
+                </Box>
 
-                    <Grid container spacing={3} sx={{ mb: 4 }}>
-                        <Grid item xs={12} md={6}>
-                            <Card elevation={3}>
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                        <VoteIcon sx={{ fontSize: 40, color: 'primary.main', mr: 2 }} />
-                                        <Box>
-                                            <Typography variant="h6" color="text.secondary">
-                                                مجموع آراء
-                                            </Typography>
-                                            <Typography variant="h3">
-                                                {totalVotes}
-                                            </Typography>
-                                        </Box>
+                <Grid container spacing={3} sx={{ mb: 4 }}>
+                    <Grid item xs={12} md={4}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                    <PeopleIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
+                                    <Box>
+                                        <Typography variant="h6" color="text.secondary">
+                                            تعداد شرکت‌کنندگان
+                                        </Typography>
+                                        <Typography variant="h4">
+                                            {results.length}
+                                        </Typography>
                                     </Box>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <Card elevation={3}>
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                        <PeopleIcon sx={{ fontSize: 40, color: 'primary.main', mr: 2 }} />
-                                        <Box>
-                                            <Typography variant="h6" color="text.secondary">
-                                                تعداد رای‌دهندگان
-                                            </Typography>
-                                            <Typography variant="h3">
-                                                {totalVoters}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {totalVoters > 0 
-                                                    ? `مشارکت: ${((totalVotes / (totalVoters * 3)) * 100).toFixed(1)}%`
-                                                    : 'بدون رای‌دهنده'}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    </Grid>
-
-                    <Card elevation={3}>
-                        <CardContent>
-                            <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
-                                نتایج تفصیلی
-                            </Typography>
-                            {error && (
-                                <Alert severity="error" sx={{ mb: 2 }}>
-                                    {error}
-                                </Alert>
-                            )}
-                            {loading ? (
-                                <Box sx={{ width: '100%', mt: 2 }}>
-                                    <LinearProgress />
                                 </Box>
-                            ) : (
-                                <TableContainer>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                    <VoteIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
+                                    <Box>
+                                        <Typography variant="h6" color="text.secondary">
+                                            مجموع آراء
+                                        </Typography>
+                                        <Typography variant="h4">
+                                            {results.reduce((sum, r) => sum + Math.floor(r.votes), 0)}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                    <TrendingUpIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
+                                    <Box>
+                                        <Typography variant="h6" color="text.secondary">
+                                            میانگین امتیاز
+                                        </Typography>
+                                        <Typography variant="h4">
+                                            {(results.reduce((sum, r) => sum + r.votes, 0) / results.length).toFixed(1)}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
+
+                <Paper elevation={3} sx={{ p: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
+                        رتبه‌بندی کارکنان
+                    </Typography>
+                    <TableContainer>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>رتبه</TableCell>
+                                    <TableCell>نام</TableCell>
+                                    <TableCell>دپارتمان</TableCell>
+                                    <TableCell>تعداد رای</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {results.map((result, index) => (
+                                    <TableRow 
+                                        key={result.id} 
+                                        hover 
+                                        onClick={() => handleEmployeeClick(result)}
+                                        style={{ cursor: isAdmin ? 'pointer' : 'default' }}
+                                        sx={{ 
+                                            '&:nth-of-type(odd)': { backgroundColor: 'action.hover' },
+                                            '&:hover': { backgroundColor: 'action.selected' }
+                                        }}
+                                    >
+                                        <TableCell>
+                                            <Chip 
+                                                label={index + 1} 
+                                                color="default" 
+                                                variant="outlined"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                                                {result.name}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip 
+                                                label={result.department} 
+                                                variant="outlined" 
+                                                size="small"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                <VoteIcon sx={{ fontSize: 20, mr: 1, color: 'primary.main' }} />
+                                                <Typography>
+                                                    {Math.floor(result.votes)}
+                                                </Typography>
+                                            </Box>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
+            </Box>
+
+            {isAdmin && (
+                <Dialog 
+                    open={openDialog} 
+                    onClose={() => setOpenDialog(false)}
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle>
+                        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                            جزئیات امتیازات {selectedEmployee?.name}
+                        </Typography>
+                    </DialogTitle>
+                    <DialogContent>
+                        {employeeDetails && (
+                            <Box>
+                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                    میانگین امتیازات به تفکیک معیار
+                                </Typography>
+                                <Grid container spacing={2} sx={{ mb: 4 }}>
+                                    {Object.entries(employeeDetails.criteriaAverages).map(([criteria, average]) => (
+                                        <Grid item xs={12} sm={6} key={criteria}>
+                                            <Paper elevation={2} sx={{ p: 2 }}>
+                                                <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                                                    {criteriaLabels[criteria]}
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                                                    <Rating value={average} precision={0.1} readOnly />
+                                                    <Typography variant="body2" sx={{ mr: 1, color: 'text.secondary' }}>
+                                                        {average.toFixed(1)}
+                                                    </Typography>
+                                                </Box>
+                                            </Paper>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+
+                                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                                    جزئیات رای‌ها
+                                </Typography>
+                                <TableContainer component={Paper} elevation={2}>
                                     <Table>
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell>رتبه</TableCell>
-                                                <TableCell>کارمند</TableCell>
-                                                <TableCell>دپارتمان</TableCell>
-                                                <TableCell align="right">تعداد آراء</TableCell>
-                                                <TableCell align="right">درصد</TableCell>
+                                                <TableCell>تاریخ</TableCell>
+                                                <TableCell>معیارها</TableCell>
+                                                <TableCell>میانگین</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {results.map((employee, index) => (
-                                                <TableRow 
-                                                    key={employee.id} 
-                                                    hover
-                                                    sx={{
-                                                        backgroundColor: index < 3 ? 'action.hover' : 'inherit'
-                                                    }}
-                                                >
+                                            {employeeDetails.ratings.map((rating, index) => (
+                                                <TableRow key={index}>
+                                                    <TableCell>{formatDate(rating.date)}</TableCell>
                                                     <TableCell>
-                                                        <Chip
-                                                            label={`#${index + 1}`}
-                                                            color={index < 3 ? 'primary' : 'default'}
-                                                            variant={index < 3 ? 'filled' : 'outlined'}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                            <Avatar 
-                                                                sx={{ 
-                                                                    bgcolor: index < 3 ? 'primary.main' : 'grey.400',
-                                                                    mr: 2 
-                                                                }}
-                                                            >
-                                                                {employee.name.charAt(0)}
-                                                            </Avatar>
-                                                            {employee.name}
+                                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                            {Object.entries(rating.criteriaRatings).map(([criteria, score]) => (
+                                                                <Box key={criteria} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                    <Typography variant="body2" sx={{ minWidth: 150 }}>
+                                                                        {criteriaLabels[criteria]}:
+                                                                    </Typography>
+                                                                    <Rating 
+                                                                        value={score} 
+                                                                        size="small" 
+                                                                        readOnly 
+                                                                        precision={0.5}
+                                                                    />
+                                                                    <Typography variant="body2" color="text.secondary">
+                                                                        {score.toFixed(1)}
+                                                                    </Typography>
+                                                                </Box>
+                                                            ))}
                                                         </Box>
                                                     </TableCell>
-                                                    <TableCell>{employee.department}</TableCell>
-                                                    <TableCell align="right">{employee.votes}</TableCell>
-                                                    <TableCell align="right">
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                                            <Box sx={{ width: '100%', maxWidth: 100, mr: 2 }}>
-                                                                <LinearProgress
-                                                                    variant="determinate"
-                                                                    value={totalVotes > 0 ? (employee.votes / totalVotes) * 100 : 0}
-                                                                    sx={{ 
-                                                                        height: 8, 
-                                                                        borderRadius: 4,
-                                                                        backgroundColor: 'grey.200',
-                                                                        '& .MuiLinearProgress-bar': {
-                                                                            backgroundColor: index < 3 ? 'primary.main' : 'grey.500'
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </Box>
-                                                            {totalVotes > 0
-                                                                ? `${((employee.votes / totalVotes) * 100).toFixed(1)}%`
-                                                                : '0%'}
+                                                    <TableCell>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                            <Rating 
+                                                                value={rating.averageScore} 
+                                                                precision={0.1} 
+                                                                readOnly 
+                                                                size="small"
+                                                            />
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                {rating.averageScore.toFixed(1)}
+                                                            </Typography>
                                                         </Box>
                                                     </TableCell>
                                                 </TableRow>
@@ -209,13 +393,18 @@ function Results() {
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
-                            )}
-                        </CardContent>
-                    </Card>
-                </Box>
-            </Zoom>
+                            </Box>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setOpenDialog(false)} color="primary">
+                            بستن
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            )}
         </Container>
     );
-}
+};
 
 export default Results; 

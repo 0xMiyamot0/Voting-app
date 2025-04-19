@@ -179,26 +179,27 @@ function Voting() {
   const [currentEmployeeIndex, setCurrentEmployeeIndex] = useState(0);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
-  const [ous, setOus] = useState([
-    { name: 'زرین معدن آسیا', label: 'زرین معدن آسیا', logo: '/logos/zmg.webp', active_users: 0 },
-    { name: 'آیرما', label: 'آیرما', logo: '/logos/airma.webp', active_users: 0 },
-    { name: 'بازرگانی', label: 'بازرگانی', logo: '/logos/trading.webp', active_users: 0 },
-    { name: 'اعتماد ایرانیان', label: 'اعتماد ایرانیان', logo: '/logos/etemad.webp', active_users: 0 },
-    { name: 'فلات زرین کیمیا', label: 'فلات زرین کیمیا', logo: '/logos/flat.webp', active_users: 0 },
-    { name: 'سرب و روی ایرانیان', label: 'سرب و روی ایرانیان', logo: '/logos/lead.webp', active_users: 0 },
-    { name: 'فناوری اطلاعات', label: 'فناوری اطلاعات', logo: '/logos/it.webp', active_users: 0 },
-    { name: 'گسترش روی ایرانیان', label: 'گسترش روی ایرانیان', logo: '/logos/gostaresh.webp', active_users: 0 },
-    { name: 'کیمیای زنجان گستران', label: 'کیمیای زنجان گستران', logo: '/logos/kimia.webp', active_users: 0 },
-    { name: 'واحد حقوقی', label: 'واحد حقوقی', logo: '/logos/legal.webp', active_users: 0 },
-    { name: 'مهدی آباد', label: 'مهدی آباد', logo: '/logos/mahdiabad.webp', active_users: 0 },
-    { name: 'خاورمیانه', label: 'خاورمیانه', logo: '/logos/middleeast.webp', active_users: 0 },
-    { name: 'مسئولین دفاتر', label: 'مسئولین دفاتر', logo: '/logos/office.webp', active_users: 0 },
-    { name: 'سیمین معدن', label: 'سیمین معدن', logo: '/logos/simin.webp', active_users: 0 },
-    { name: 'سهام', label: 'سهام', logo: '/logos/shares.webp', active_users: 0 },
-    { name: 'تدارکات', label: 'تدارکات', logo: '/logos/procurement.webp', active_users: 0 },
-    { name: 'ذوبگران رنگین فلز', label: 'ذوبگران رنگین فلز', logo: '/logos/zobgaran.webp', active_users: 0 },
-    { name: 'زرین روی کاسپین', label: 'زرین روی کاسپین', logo: '/logos/caspian.webp', active_users: 0 },
-    { name: 'زرین ترابر', label: 'زرین ترابر', logo: '/logos/transport.webp', active_users: 0 }
+  const [ous, setOUs] = useState([
+    { name: 'zmg', label: 'زرین معدن آسیا', logo: '/logos/zmg.webp', active_users: 0 },
+    { name: 'airma', label: 'آیرما', logo: '/logos/airma.webp', active_users: 0 },
+    { name: 'bazargani', label: 'بازرگانی', logo: '/logos/bazargani.webp', active_users: 0 },
+    { name: 'etemad', label: 'اعتماد ایرانیان', logo: '/logos/etemad.webp', active_users: 0 },
+    { name: 'flat', label: 'فلات زرین کیمیا', logo: '/logos/flat.webp', active_users: 0 },
+    { name: 'lead', label: 'سرب و روی ایرانیان', logo: '/logos/lead.webp', active_users: 0 },
+    { name: 'it', label: 'فناوری اطلاعات', logo: '/logos/it.webp', active_users: 0 },
+    { name: 'gostaresh', label: 'گسترش روی ایرانیان', logo: '/logos/gostaresh.webp', active_users: 0 },
+    { name: 'kimia', label: 'کیمیای زنجان گستران', logo: '/logos/kimia.webp', active_users: 0 },
+    { name: 'legal', label: 'واحد حقوقی', logo: '/logos/legal.webp', active_users: 0 },
+    { name: 'mahdiabad', label: 'مهدی آباد', logo: '/logos/mahdiabad.webp', active_users: 0 },
+    { name: 'middleeast', label: 'خاورمیانه', logo: '/logos/middleeast.webp', active_users: 0 },
+    { name: 'management', label: 'مدیریت', logo: '/logos/management.webp', active_users: 0 },
+    { name: 'office', label: 'مسئولین دفاتر', logo: '/logos/office.webp', active_users: 0 },
+    { name: 'simin', label: 'سیمین معدن', logo: '/logos/simin.webp', active_users: 0 },
+    { name: 'procurement', label: 'تدارکات', logo: '/logos/procurement.webp', active_users: 0 },
+    { name: 'zobgaran', label: 'ذوبگران رنگین فلز', logo: '/logos/zobgaran.webp', active_users: 0 },
+    { name: 'caspian', label: 'زرین روی کاسپین', logo: '/logos/caspian.webp', active_users: 0 },
+    { name: 'transport', label: 'زرین ترابر', logo: '/logos/transport.webp', active_users: 0 },
+    { name: 'other', label: 'سایر', logo: '/logos/other.webp', active_users: 0 }
   ]);
   const [selectedOU, setSelectedOU] = useState(null);
   const [openAddEmployeeDialog, setOpenAddEmployeeDialog] = useState(false);
@@ -222,8 +223,7 @@ function Voting() {
         setEmployees(response.data);
         // Group employees by OU (stored in department field)
         const grouped = response.data.reduce((acc, emp) => {
-          // Use department field which contains the OU path
-          const ou = emp.department || 'سایر';
+          const ou = emp.department || 'other';
           if (!acc[ou]) {
             acc[ou] = [];
           }
@@ -235,9 +235,10 @@ function Voting() {
         // Update active_users count for each OU
         const updatedOUs = [...ous];
         updatedOUs.forEach(ou => {
-          ou.active_users = grouped[ou.name]?.length || 0;
+          const ouName = ou.name.toLowerCase();
+          ou.active_users = grouped[ouName]?.length || 0;
         });
-        setOus(updatedOUs);
+        setOUs(updatedOUs);
         
         // Initialize ratings for each employee
         const initialRatings = {};
@@ -249,12 +250,12 @@ function Voting() {
         });
         setRatings(initialRatings);
       } else {
-        setError('داده‌های دریافتی نامعتبر است');
+        setError('داده‌های دریافتی از سرور نامعتبر است');
         setOpenSnackbar(true);
       }
       setLoading(false);
     } catch (error) {
-      setError('خطا در دریافت لیست کارمندان: ' + error.message);
+      setError('خطا در دریافت اطلاعات کارمندان: ' + (error.response?.data?.message || error.message));
       setOpenSnackbar(true);
       setLoading(false);
     }
@@ -273,7 +274,7 @@ function Voting() {
 
   const handleAddEmployee = () => {
     if (!newEmployee.name.trim()) {
-      setError('لطفا نام کارمند را وارد کنید');
+      setError('لطفاً نام کارمند را وارد کنید');
       setOpenSnackbar(true);
       return;
     }
@@ -300,7 +301,7 @@ function Voting() {
     });
 
     // Update the OU active_users count
-    setOus(prev => {
+    setOUs(prev => {
       return prev.map(ou => {
         if (ou.name === selectedOU) {
           return { ...ou, active_users: ou.active_users + 1 };
@@ -328,12 +329,22 @@ function Voting() {
 
   const checkVotingStatus = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/check-auth', {
-        withCredentials: true
+      const response = await axios.get('/api/check-auth', {
+        withCredentials: true,
+        timeout: 5000 // 5 second timeout
       });
       setHasVoted(response.data.has_voted);
     } catch (error) {
-      console.error('Error checking voting status:', error);
+      if (error.code === 'ECONNABORTED') {
+        setError('خطا در اتصال به سرور: زمان انتظار به پایان رسید');
+      } else if (error.response) {
+        setError('خطا در بررسی وضعیت رای‌دهی: ' + (error.response.data?.error || error.response.statusText));
+      } else if (error.request) {
+        setError('خطا در اتصال به سرور: سرور در دسترس نیست');
+      } else {
+        setError('خطا در بررسی وضعیت رای‌دهی: ' + error.message);
+      }
+      setOpenSnackbar(true);
     }
   };
 
@@ -354,16 +365,15 @@ function Voting() {
 
   const handleSubmit = async () => {
     if (!selectedEmployee || !isRatingComplete(selectedEmployee.id)) {
-      setError('لطفا برای تمام معیارها امتیاز دهید');
+      setError('لطفاً برای تمام معیارها امتیاز دهید');
       setOpenSnackbar(true);
       return;
     }
 
     try {
       const response = await axios.post('http://localhost:5000/api/vote', {
-        ratings: {
-          [selectedEmployee.id]: ratings[selectedEmployee.id]
-        }
+        employeeId: selectedEmployee.id,
+        ratings: ratings[selectedEmployee.id]
       }, {
         withCredentials: true
       });
@@ -427,7 +437,7 @@ function Voting() {
         <Fade in={true} timeout={500}>
           <Box sx={{ mt: 4 }}>
             <Alert severity="error" icon={<ErrorIcon />}>
-              لطفا برای رای دادن وارد شوید
+              لطفاً برای رای دادن وارد شوید
             </Alert>
           </Box>
         </Fade>
@@ -562,7 +572,7 @@ function Voting() {
                     <ArrowBackIcon />
                   </IconButton>
                   <Typography variant="h6" sx={{ color: '#1a237e' }}>
-                    کارمندان {selectedOU}
+                    کارمندان {ous.find(ou => ou.name === selectedOU)?.label}
                   </Typography>
                 </Box>
                 {isAdmin && (
@@ -583,7 +593,7 @@ function Voting() {
               </Box>
 
               <Grid container spacing={3}>
-                {groupedEmployees[selectedOU].map((employee) => (
+                {groupedEmployees[selectedOU]?.map((employee) => (
                   <Grid item xs={12} sm={6} md={4} key={employee.id}>
                     <Card 
                       elevation={0}
@@ -664,11 +674,11 @@ function Voting() {
                       color: '#1a237e',
                       fontWeight: 'bold'
                     }}>
-                      لیست گروه‌ها
+                      لیست گروه‌های شرکت زرین معدن آسیا
                     </Typography>
                     <Box sx={{ 
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
                       gap: 2,
                       padding: 1
                     }}>
@@ -689,7 +699,9 @@ function Voting() {
                             justifyContent: 'center',
                             alignItems: 'center',
                             textAlign: 'center',
-                            padding: 2
+                            padding: 2,
+                            background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
+                            border: '1px solid rgba(0,0,0,0.08)'
                           }}
                           onClick={() => handleOUClick(ou.name)}
                         >
@@ -697,24 +709,25 @@ function Voting() {
                             display: 'flex', 
                             flexDirection: 'column', 
                             alignItems: 'center',
-                            gap: 1
+                            gap: 0.5
                           }}>
                             <Box
                               component="img"
                               src={ou.logo}
                               alt={ou.label}
                               sx={{
-                                width: 40,
-                                height: 40,
+                                width: 32,
+                                height: 32,
                                 objectFit: 'contain',
-                                mb: 1
+                                mb: 0.5
                               }}
                             />
                             <Typography 
-                              variant="subtitle1" 
+                              variant="subtitle2" 
                               sx={{ 
                                 fontWeight: 500,
-                                color: '#1a237e'
+                                color: '#1a237e',
+                                fontSize: '0.9rem'
                               }}
                             >
                               {ou.label}

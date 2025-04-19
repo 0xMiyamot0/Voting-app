@@ -8,6 +8,7 @@ import AdminPanel from './components/AdminPanel';
 import Voting from './components/Voting';
 import Results from './components/Results';
 import Navbar from './components/Navbar';
+import EmployeeDetails from './components/EmployeeDetails';
 import './fonts.css';
 import theme from './theme';
 
@@ -233,6 +234,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+            <Route path="/employee/:id" element={<EmployeeDetails />} />
           </Routes>
         </Router>
       </AuthProvider>
